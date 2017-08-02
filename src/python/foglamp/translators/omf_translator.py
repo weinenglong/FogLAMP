@@ -66,7 +66,18 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # FIXME: we need to [SHOULD] move this to defaults.py! unless this also needs to be read from database
-_DB_URL = 'postgresql:///foglamp'
+
+# Set variables for connecting to database
+_db_type = "postgres"
+_user = "foglamp"
+_db_user = "foglamp"
+_host = "127.0.0.1"
+_db = "foglamp"
+
+# Create Connection
+_DB_URL = '{}://{}:{}@{}/{}'.format(_db_type, _db_user, _user, _host, _db)
+# _DB_URL = 'postgresql:///foglamp'
+
 """DB references"""
 
 _LOG_SCREEN = True

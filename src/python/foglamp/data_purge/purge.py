@@ -49,8 +49,17 @@ __copyright__ = "Copyright (c) 2017 OSI Soft, LLC"
 __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
+# Set variables for connecting to database
+_db_type = "postgres"
+_user = "foglamp"
+_db_user = "foglamp"
+_host = "127.0.0.1"
+_db = "foglamp"
+
 # Create Connection
-__CONNECTION_STRING = "postgres:///foglamp"
+__CONNECTION_STRING = '{}://{}:{}@{}/{}'.format(_db_type, _db_user, _user, _host, _db)
+
+#__CONNECTION_STRING = "postgres:///foglamp"
 
 _DEFAULT_PURGE_CONFIG = {
     "age": {

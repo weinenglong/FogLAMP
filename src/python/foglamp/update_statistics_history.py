@@ -20,7 +20,16 @@ __version__ = "${VERSION}"
 
 
 # Set variables for connecting to database
-_CONNECTION_STRING = "postgres:///foglamp"
+_db_type = "postgres"
+_user = "foglamp"
+_db_user = "foglamp"
+_host = "127.0.0.1"
+_db = "foglamp"
+
+# Create Connection
+_CONNECTION_STRING = '{}://{}:{}@{}/{}'.format(_db_type, _db_user, _user, _host, _db)
+
+#_CONNECTION_STRING = "postgres:///foglamp"
 
 # Deceleration of tables in SQLAlchemy format
 _STATS_TABLE = sqlalchemy.Table('statistics', sqlalchemy.MetaData(),

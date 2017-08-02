@@ -88,7 +88,7 @@ class Scheduler(object):
             """Maps a task id to a process"""
 
     """Constant class attributes"""
-    _CONNECTION_STRING = "dbname='foglamp'"
+    _CONNECTION_STRING = 'postgresql://foglamp:foglamp@localhost:5432/foglamp'
     _HOUR_SECONDS = 3600
     _DAY_SECONDS = 3600*24
     _WEEK_SECONDS = 3600*24*7
