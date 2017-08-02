@@ -67,7 +67,7 @@ ALTER USER foglamp ENCRYPTED PASSWORD 'foglamp';
 -- Create the foglamp tablespace
 CREATE TABLESPACE foglamp
   OWNER foglamp
-  LOCATION '/var/lib/postgresql/9.6/';
+  LOCATION '/home/moduser/snap/postgresql96/common/foglamp/';
 
 
 -- Create the foglamp database
