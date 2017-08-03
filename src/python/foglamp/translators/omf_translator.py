@@ -66,18 +66,7 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # FIXME: we need to [SHOULD] move this to defaults.py! unless this also needs to be read from database
-
-# Set variables for connecting to database
-_db_type = "postgres"
-_user = "foglamp"
-_db_user = "foglamp"
-_host = "127.0.0.1"
-_db = "foglamp"
-
-# Create Connection
-_DB_URL = '{}://{}:{}@{}/{}'.format(_db_type, _db_user, _user, _host, _db)
-# _DB_URL = 'postgresql:///foglamp'
-
+_DB_URL = 'postgresql:///foglamp'
 """DB references"""
 
 _LOG_SCREEN = True
@@ -215,7 +204,7 @@ def initialize_plugin():
 
         # OMFTypes
         _sensor_data_keys = ["x", "y", "z", "pressure", "lux", "humidity", "temperature",
-                             "object", "ambient", "left", "right", "magnet", "button"]
+                             "object", "ambient", "left", "right", "magnet", "button", "tick"]
 
         """Available proprieties in the reading field"""
 
@@ -226,9 +215,9 @@ def initialize_plugin():
                          "TI_sensorTag_luxometer",
                          "TI_sensorTag_pressure",
                          "TI_sensorTag_temperature",
-
                          "TI_sensorTag_keys",
-                         "mouse"
+                         "mouse",
+                         "wall_clock"
                          ]
 
         _sensor_name_type = {
@@ -241,7 +230,8 @@ def initialize_plugin():
             "TI sensorTag/pressure":      "TI_sensorTag_pressure",
             "TI sensorTag/temperature":   "TI_sensorTag_temperature",
             "TI sensorTag/keys":          "TI_sensorTag_keys",
-            "mouse":                      "mouse"
+            "mouse":                      "mouse",
+            "wall clock":                 "wall_clock"
         }
 
         _OMF_types_definition = {
@@ -549,6 +539,37 @@ def initialize_plugin():
                             "isindex": True
                         },
                         "button": {
+                            "type": "string"
+                        }
+                    }
+                }
+            ],
+            "wall_clock": [
+                {
+                    "id": "xxx",
+                    "type": "object",
+                    "classification": "static",
+                    "properties": {
+                        "Name": {
+                            "type": "string",
+                            "isindex": True
+                        },
+                        "Location": {
+                            "type": "string"
+                        }
+                    }
+                },
+                {
+                    "id": "xxx",
+                    "type": "object",
+                    "classification": "dynamic",
+                    "properties": {
+                        "Time": {
+                            "format": "date-time",
+                            "type": "string",
+                            "isindex": True
+                        },
+                        "tick": {
                             "type": "string"
                         }
                     }
