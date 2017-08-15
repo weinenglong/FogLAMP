@@ -221,7 +221,7 @@ foglamp_install() {
 
 
 # If FogLAMP is running on Ubuntu core, it must run in classic mode
-if [ `snap list | grep -c 'core'` -gt 0 ]; then
+if [ `snap list 2>&1 | grep -c 'core'` -gt 0 ]; then
   if [ "$debian_chroot" != 'classic' ]; then
     echo "FogLAMP must run in classic mode. Type \"sudo classic\" first and run this command again."
     exit 1
