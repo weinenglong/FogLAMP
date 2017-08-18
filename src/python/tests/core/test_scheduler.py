@@ -64,16 +64,6 @@ class TestScheduler:
         await scheduler.populate_test_data()  # Populate data in foglamp.scheduled_processes
         await scheduler.start()
 
-        # assert that the schedule type is manuel
-        interval_schedule = ManualSchedule()
-        assert interval_schedule.schedule_type == Schedule.Type.MANUAL
-
-        interval_schedule.name = 'sleep10'
-        interval_schedule.process_name = "sleep10"
-        interval_schedule.repeat = datetime.timedelta(seconds=1)
-
-        await scheduler.save_schedule(interval_schedule)
-
         # assert that the schedule type is interval
         interval_schedule = IntervalSchedule()
         assert interval_schedule.schedule_type == Schedule.Type.INTERVAL
@@ -130,7 +120,7 @@ class TestScheduler:
 
         schedule = await scheduler.get_schedule(interval_schedule.schedule_id)
 
-        # Make sure that the values used by schedule are as excpected
+        # Make sure that the values used by schedule are as expected
         assert schedule.process_name == 'sleep1'
         assert schedule.name == 'updated'
         assert schedule.repeat.seconds == 5
@@ -391,7 +381,7 @@ class TestScheduler:
 
         await scheduler.get_schedule(interval_schedule.schedule_id)  # Get the schedule by schedule process ID
 
-        #  Assert that schedule is retrivved by ID
+        # Assert that schedule is retrieved by ID
         try:
             await scheduler.get_schedule(uuid.uuid4())
             assert False
