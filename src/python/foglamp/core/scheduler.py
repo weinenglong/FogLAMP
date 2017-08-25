@@ -282,7 +282,7 @@ class Schedule(object):
     def __init__(self, schedule_type: Type):
         self.schedule_id = None  # type: uuid.UUID
         self.name = None  # type: str
-        self.exclusive = True  # type: bool
+        self.exclusive = True
         self.repeat = None  # type: datetime.timedelta
         self.process_name = None  # type: str
         self.schedule_type = schedule_type  # type: Schedule.Type
@@ -337,9 +337,9 @@ class Scheduler(object):
     """
 
     # TODO: Document the fields
-    _ScheduleRow = collections.namedtuple(
-        'ScheduleRow', ['id', 'name', 'type', 'time', 'day', 'repeat', 'repeat_seconds',
-                        'exclusive', 'process_name'])
+    _ScheduleRow = collections.namedtuple('ScheduleRow', ['id', 'name', 'type', 'time', 'day',
+                                                          'repeat', 'repeat_seconds', 'exclusive',
+                                                          'process_name'])
     """Represents a row in the schedules table"""
 
     class _TaskProcess(object):
@@ -365,7 +365,7 @@ class Scheduler(object):
         __slots__ = ['next_start_time', 'task_processes', 'start_now']
 
         def __init__(self):
-            self.next_start_time = None  # type: int
+            self.next_start_time = None
             """When to next start a task for the schedule"""
             self.task_processes = dict()
             """dict of task id to _TaskProcess"""
@@ -408,9 +408,9 @@ class Scheduler(object):
 
         # Initialize class attributes
         if not cls._logger:
-            cls._logger = logger.setup(__name__)
             # cls._logger = logger.setup(__name__, destination=logger.CONSOLE, level=logging.DEBUG)
             # cls._logger = logger.setup(__name__, level=logging.DEBUG)
+            cls._logger = logger.setup(__name__)
 
         if cls._schedules_tbl is None:
             metadata = sqlalchemy.MetaData()
