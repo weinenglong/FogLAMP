@@ -399,7 +399,7 @@ class Scheduler(object):
     _scheduled_processes_tbl = None  # type: sqlalchemy.Table
     _schedules_tbl = None  # type: sqlalchemy.Table
     _tasks_tbl = None  # type: sqlalchemy.Table
-    _logger = None  # type: logging.Logger
+    _logger = None  # logging.Logger
 
     def __init__(self):
         """Constructor"""
