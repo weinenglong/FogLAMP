@@ -95,8 +95,9 @@ class TestScheduler:
         await scheduler.save_schedule(interval_schedule)  # Save update on scheduler
 
         await asyncio.sleep(1)
+        # Assert only 1 task is running
         tasks = await scheduler.get_running_tasks()
-        assert len(tasks) == 1  # assert a single task is running
+        assert len(tasks) == 1  
 
         # Update 'updated' schedule interval
         interval_schedule.name = 'updated'
@@ -105,9 +106,10 @@ class TestScheduler:
 
         await scheduler.save_schedule(interval_schedule)  # Save update on scheduler
         await asyncio.sleep(6)
-
+        
+        # Assert: only 1 task is running
         tasks = await scheduler.get_running_tasks()  # list of current running tasks
-        assert len(tasks) == 1  # assert that only 1 task is running
+        assert len(tasks) == 1 
 
         interval_schedule.exclusive = False
         await scheduler.save_schedule(interval_schedule)
@@ -148,8 +150,9 @@ class TestScheduler:
         await scheduler.save_schedule(startup_schedule)
 
         await asyncio.sleep(1)
+        # Assert no tasks ar running
         tasks = await scheduler.get_running_tasks()
-        assert len(tasks) == 0  # assert no tasks are running
+        assert len(tasks) == 0  
 
         await scheduler.get_schedule(startup_schedule.schedule_id)  # ID of the schedule startup
 
@@ -159,24 +162,26 @@ class TestScheduler:
         await scheduler.start()
 
         await asyncio.sleep(2)
-
+        # Assert only 1 task is running
         tasks = await scheduler.get_running_tasks()
-        assert len(tasks) == 1  # Assert that 1 task is running
-
+        assert len(tasks) == 1 
+        
         scheduler.max_running_tasks = 0  # set that no tasks would run
         await scheduler.cancel_task(tasks[0].task_id)
 
         await asyncio.sleep(2)
 
+        # Assert no tasks are running
         tasks = await scheduler.get_running_tasks()
-        assert len(tasks) == 0  # assert that no tasks are running
+        assert len(tasks) == 0 
 
         scheduler.max_running_tasks = 1
 
         await asyncio.sleep(2)
-
-        tasks = await scheduler.get_running_tasks()  # Get list of running tasks
-        assert len(tasks) == 1  # make sure that a single task is running
+        
+        # Assert a single task is running
+        tasks = await scheduler.get_running_tasks() 
+        assert len(tasks) == 1  
 
         await self.stop_scheduler(scheduler)
 
