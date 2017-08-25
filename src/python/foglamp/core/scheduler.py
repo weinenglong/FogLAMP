@@ -9,15 +9,15 @@
 import asyncio
 import collections
 import datetime
-# import logging  # Needed for dev only
+# import logging  # For development only
 import math
 import time
 import uuid
 from enum import IntEnum
-from typing import List
+from typing import Iterable, List, Tuple, Union
 
 import aiopg.sa
-import sqlalchemy as sa
+import sqlalchemy
 from sqlalchemy.dialects import postgresql as pg_types
 
 from foglamp import logger
@@ -62,6 +62,161 @@ class ScheduleNotFoundError(ValueError):
             "Schedule not found: {}".format(schedule_id), *args)
 
 
+# Forward declare
+class LogicExpr:
+    pass
+
+
+class Where(object):
+    @staticmethod
+    def and_(*argv)->LogicExpr:  # This should be Tuple[Query] but Python doesn't allow it
+        return LogicExpr(LogicExpr.Operator.AND, argv)
+
+    @staticmethod
+    def or_(*argv)->LogicExpr:  # This should be Tuple[Query] but Python doesn't allow it
+        return LogicExpr(LogicExpr.Operator.OR, argv)
+
+
+class WhereExpr(object):
+    def and_(self, *argv)->LogicExpr:
+        return LogicExpr(LogicExpr.Operator.AND, argv, self)
+
+    def or_(self, *argv)->LogicExpr:
+        return LogicExpr(LogicExpr.Operator.OR, argv, self)
+
+    def __and__(self, other):
+        return Where.and_(self, other)
+
+    def __or__(self, other):
+        return Where.or_(self, other)
+
+    @property
+    def query(self):
+        raise TypeError("Abstract method called")
+
+
+class LogicExpr(WhereExpr):
+    __slots__ = ['_and_expr', '_queries', '_operator']
+
+    class Operator(IntEnum):
+        """Enumeration for tasks.task_state"""
+        OR = 1
+        AND = 2
+
+    def __init__(self, operator: Operator, argv, and_expr: WhereExpr = None):
+        self._and_expr = and_expr
+        self._operator = operator
+        self._queries = argv  # type: Tuple[WhereExpr]
+
+    @property
+    def query(self):
+        queries = []
+
+        for query_item in self._queries:
+            queries.append(query_item.query)
+
+        if self._operator == self.Operator.AND:
+            if self._and_expr is not None:
+                return sqlalchemy.and_(self._and_expr.query, *queries)
+            return sqlalchemy.and_(*queries)
+        elif self._operator == self.Operator.OR:
+            if self._and_expr is not None:
+                return sqlalchemy.and_(self._and_expr.query, sqlalchemy.or_(*queries))
+            return sqlalchemy.or_(*queries)
+        else:
+            raise ValueError("Invalid operator: {}".format(int(self._operator)))
+
+
+class CompareExpr(WhereExpr):
+    __slots__ = ['_column', '_operator', '_value']
+
+    class Operator(IntEnum):
+        """Enumeration for tasks.task_state"""
+        NE = 1
+        EQ = 2
+        LT = 3
+        LE = 4
+        GT = 5
+        GE = 6
+        LIKE = 7
+        IN = 8
+
+    def __init__(self, column: sqlalchemy.Column, operator: Operator, value):
+        self._column = column
+        self._operator = operator
+        self._value = value
+
+    @property
+    def query(self):
+        if self._operator == self.Operator.NE:
+            return self._column != self._value
+        if self._operator == self.Operator.EQ:
+            return self._column == self._value
+        if self._operator == self.Operator.LT:
+            return self._column < self._value
+        if self._operator == self.Operator.LE:
+            return self._column <= self._value
+        if self._operator == self.Operator.GT:
+            return self._column > self._value
+        if self._operator == self.Operator.GE:
+            return self._column >= self._value
+        if self._operator == self.Operator.LIKE:
+            return self._column.like(self._value)
+        if self._operator == self.Operator.IN:
+            return self._column.in_(self._value)
+
+        raise ValueError("Invalid operator: {}".format(int(self._operator)))
+
+
+class AttributeDesc:  # Forward declare
+    pass
+
+
+class Attribute(object):
+    __slots__ = ['_column', '_desc']
+
+    def __init__(self, column: sqlalchemy.Column):
+        self._column = column
+        self._desc = AttributeDesc(column)
+
+    def in_(self, *argv):
+        return CompareExpr(self._column, CompareExpr.Operator.IN, argv)
+
+    def like(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.LIKE, value)
+
+    def __lt__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.LT, value)
+
+    def __le__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.LE, value)
+
+    def __eq__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.EQ, value)
+
+    def __ne__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.NE, value)
+
+    def __gt__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.GT, value)
+
+    def __ge__(self, value):
+        return CompareExpr(self._column, CompareExpr.Operator.GE, value)
+
+    @property
+    def column(self)->sqlalchemy.Column:
+        return self._column
+
+    @property
+    def desc(self)->AttributeDesc:
+        return self._desc
+
+
+class AttributeDesc(Attribute):
+    def __init__(self, column: sqlalchemy.Column):
+        self._column = column.desc()
+
+
 class Task(object):
     """A task represents an operating system process"""
 
@@ -72,10 +227,15 @@ class Task(object):
         CANCELED = 3
         INTERRUPTED = 4
 
+    # Class attributes
+    attr = collections.namedtuple('TaskAttributes', ['state', 'process_name', 'start_time',
+                                  'end_time', 'exit_code'])
+
     __slots__ = ['task_id', 'process_name', 'state', 'cancel_requested', 'start_time',
                  'end_time', 'state', 'exit_code', 'reason']
 
     def __init__(self):
+        # Instance attributes
         self.task_id = None  # type: uuid.UUID
         """Unique identifier"""
         self.process_name = None  # type: str
@@ -85,6 +245,15 @@ class Task(object):
         self.start_time = None  # type: datetime.datetime
         self.end_time = None  # type: datetime.datetime
         self.exit_code = None  # type: int
+
+    @classmethod
+    def init(cls, tasks_tbl: sqlalchemy.Table)->None:
+        """Initializes class attributes"""
+        cls.attr.state = Attribute(tasks_tbl.c.state)
+        cls.attr.process_name = Attribute(tasks_tbl.c.process_name)
+        cls.attr.start_time = Attribute(tasks_tbl.c.start_time)
+        cls.attr.end_time = Attribute(tasks_tbl.c.end_time)
+        cls.attr.exit_code = Attribute(tasks_tbl.c.end_time)
 
 
 class ScheduledProcess(object):
@@ -172,8 +341,8 @@ class Scheduler(object):
 
     # TODO: Document the fields
     _ScheduleRow = collections.namedtuple(
-        'ScheduleRow',
-        'id name type time day repeat repeat_seconds exclusive process_name')
+        'ScheduleRow', ['id', 'name', 'type', 'time', 'day', 'repeat', 'repeat_seconds',
+                        'exclusive', 'process_name'])
     """Represents a row in the schedules table"""
 
     class _TaskProcess(object):
@@ -219,10 +388,10 @@ class Scheduler(object):
     """Wait this number of seconds in :meth:`stop` for tasks to stop"""
 
     # Mostly constant class attributes
-    _scheduled_processes_tbl = None  # type: sa.Table
-    _schedules_tbl = None  # type: sa.Table
-    _tasks_tbl = None  # type: sa.Table
-    _logger = None
+    _scheduled_processes_tbl = None  # type: sqlalchemy.Table
+    _schedules_tbl = None  # type: sqlalchemy.Table
+    _tasks_tbl = None  # type: sqlalchemy.Table
+    _logger = None  # type: logging.Logger
 
     def __init__(self):
         """Constructor"""
@@ -230,42 +399,44 @@ class Scheduler(object):
         cls = Scheduler
         # Class attributes
         if not cls._logger:
+            cls._logger = logger.setup(__name__)
             # cls._logger = logger.setup(__name__, destination=logger.CONSOLE, level=logging.DEBUG)
             # cls._logger = logger.setup(__name__, level=logging.DEBUG)
-            cls._logger = logger.setup(__name__)
 
         if cls._schedules_tbl is None:
-            metadata = sa.MetaData()
+            metadata = sqlalchemy.MetaData()
 
-            cls._schedules_tbl = sa.Table(
+            cls._schedules_tbl = sqlalchemy.Table(
                 'schedules',
                 metadata,
-                sa.Column('id', pg_types.UUID),
-                sa.Column('schedule_name', sa.types.VARCHAR(20)),
-                sa.Column('process_name', sa.types.VARCHAR(20)),
-                sa.Column('schedule_type', sa.types.SMALLINT),
-                sa.Column('schedule_time', sa.types.TIME),
-                sa.Column('schedule_day', sa.types.SMALLINT),
-                sa.Column('schedule_interval', sa.types.Interval),
-                sa.Column('exclusive', sa.types.BOOLEAN))
+                sqlalchemy.Column('id', pg_types.UUID),
+                sqlalchemy.Column('schedule_name', sqlalchemy.types.VARCHAR(20)),
+                sqlalchemy.Column('process_name', sqlalchemy.types.VARCHAR(20)),
+                sqlalchemy.Column('schedule_type', sqlalchemy.types.SMALLINT),
+                sqlalchemy.Column('schedule_time', sqlalchemy.types.TIME),
+                sqlalchemy.Column('schedule_day', sqlalchemy.types.SMALLINT),
+                sqlalchemy.Column('schedule_interval', sqlalchemy.types.Interval),
+                sqlalchemy.Column('exclusive', sqlalchemy.types.BOOLEAN))
 
-            cls._tasks_tbl = sa.Table(
+            cls._tasks_tbl = sqlalchemy.Table(
                 'tasks',
                 metadata,
-                sa.Column('id', pg_types.UUID),
-                sa.Column('process_name', sa.types.VARCHAR(20)),
-                sa.Column('state', sa.types.INT),
-                sa.Column('start_time', sa.types.TIMESTAMP),
-                sa.Column('end_time', sa.types.TIMESTAMP),
-                sa.Column('pid', sa.types.INT),
-                sa.Column('exit_code', sa.types.INT),
-                sa.Column('reason', sa.types.VARCHAR(255)))
+                sqlalchemy.Column('id', pg_types.UUID),
+                sqlalchemy.Column('process_name', sqlalchemy.types.VARCHAR(20)),
+                sqlalchemy.Column('state', sqlalchemy.types.INT),
+                sqlalchemy.Column('start_time', sqlalchemy.types.TIMESTAMP),
+                sqlalchemy.Column('end_time', sqlalchemy.types.TIMESTAMP),
+                sqlalchemy.Column('pid', sqlalchemy.types.INT),
+                sqlalchemy.Column('exit_code', sqlalchemy.types.INT),
+                sqlalchemy.Column('reason', sqlalchemy.types.VARCHAR(255)))
 
-            cls._scheduled_processes_tbl = sa.Table(
+            Task.init(cls._tasks_tbl)
+
+            cls._scheduled_processes_tbl = sqlalchemy.Table(
                 'scheduled_processes',
                 metadata,
-                sa.Column('name', pg_types.VARCHAR(20)),
-                sa.Column('script', pg_types.JSONB))
+                sqlalchemy.Column('name', pg_types.VARCHAR(20)),
+                sqlalchemy.Column('script', pg_types.JSONB))
 
         # Instance attributes
         self._ready = False
@@ -748,8 +919,9 @@ class Scheduler(object):
                 datetime.datetime.fromtimestamp(schedule_execution.next_start_time))
 
     async def _get_process_scripts(self):
-        query = sa.select([self._scheduled_processes_tbl.c.name,
-                           self._scheduled_processes_tbl.c.script])
+        query = sqlalchemy.select([self._scheduled_processes_tbl.c.name,
+                                  self._scheduled_processes_tbl.c.script])
+
         query.select_from(self._scheduled_processes_tbl)
 
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
@@ -769,14 +941,14 @@ class Scheduler(object):
 
     async def _get_schedules(self):
         # TODO: Get processes first, then add to Schedule
-        query = sa.select([self._schedules_tbl.c.id,
-                           self._schedules_tbl.c.schedule_name,
-                           self._schedules_tbl.c.schedule_type,
-                           self._schedules_tbl.c.schedule_time,
-                           self._schedules_tbl.c.schedule_day,
-                           self._schedules_tbl.c.schedule_interval,
-                           self._schedules_tbl.c.exclusive,
-                           self._schedules_tbl.c.process_name])
+        query = sqlalchemy.select([self._schedules_tbl.c.id,
+                                   self._schedules_tbl.c.schedule_name,
+                                   self._schedules_tbl.c.schedule_type,
+                                   self._schedules_tbl.c.schedule_time,
+                                   self._schedules_tbl.c.schedule_day,
+                                   self._schedules_tbl.c.schedule_interval,
+                                   self._schedules_tbl.c.exclusive,
+                                   self._schedules_tbl.c.process_name])
 
         query.select_from(self._schedules_tbl)
 
@@ -1118,17 +1290,17 @@ class Scheduler(object):
 
     async def get_task(self, task_id: uuid.UUID)->Task:
         """Retrieves a task given its id"""
-        query = sa.select([self._tasks_tbl.c.id,
-                           self._tasks_tbl.c.process_name,
-                           self._tasks_tbl.c.state,
-                           self._tasks_tbl.c.start_time,
-                           self._tasks_tbl.c.end_time,
-                           self._tasks_tbl.c.exit_code,
-                           self._tasks_tbl.c.reason])
+        query = sqlalchemy.select([self._tasks_tbl.c.id,
+                                   self._tasks_tbl.c.process_name,
+                                   self._tasks_tbl.c.state,
+                                   self._tasks_tbl.c.start_time,
+                                   self._tasks_tbl.c.end_time,
+                                   self._tasks_tbl.c.exit_code,
+                                   self._tasks_tbl.c.reason])
 
         query.select_from(self._tasks_tbl)
 
-        query.where(self._tasks_tbl.c.id == task_id)
+        query = query.where(self._tasks_tbl.c.id == task_id)
 
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
             async with engine.acquire() as conn:
@@ -1146,24 +1318,58 @@ class Scheduler(object):
 
         raise TaskNotFoundError(task_id)
 
-    async def get_tasks(self, limit: int)->List[Task]:
+    async def get_tasks(self, limit: int = 100, offset: int = 0,
+                        where: WhereExpr = None,
+                        sort: Union[Attribute, Iterable[Attribute]] = None)->List[Task]:
         """Retrieves tasks
 
         The result set is ordered by start_time descending
 
         Args:
+            offset:
+                Ignore this number of rows at the beginning of the result set.
+                Results are unpredictable unless order_by is used.
+
             limit: Return at most this number of rows
+
+            where: A query
+
+            sort:
+                A list of Task attributes to sort by. Defaults to
+                Task.attr.start_time.desc
+
         """
-        query = sa.select([self._tasks_tbl.c.id,
-                           self._tasks_tbl.c.process_name,
-                           self._tasks_tbl.c.state,
-                           self._tasks_tbl.c.start_time,
-                           self._tasks_tbl.c.end_time,
-                           self._tasks_tbl.c.exit_code,
-                           self._tasks_tbl.c.reason]).select_from(self._tasks_tbl).order_by(
-                                self._tasks_tbl.c.start_time.desc()).limit(limit)
+        query = sqlalchemy.select([self._tasks_tbl.c.id,
+                                   self._tasks_tbl.c.process_name,
+                                   self._tasks_tbl.c.state,
+                                   self._tasks_tbl.c.start_time,
+                                   self._tasks_tbl.c.end_time,
+                                   self._tasks_tbl.c.exit_code,
+                                   self._tasks_tbl.c.reason])
+
+        query.select_from(self._tasks_tbl)
+
+        if where:
+            query = query.where(where.query)
+
+        if sort:
+            if isinstance(sort, collections.Iterable):
+                for order in sort:
+                    query = query.order_by(order.column)
+            else:
+                query = query.order_by(sort.column)
+        else:
+            query = query.order_by(self._tasks_tbl.c.start_time.desc())
+
+        if offset:
+            query = query.offset(offset)
+
+        if limit:
+            query = query.limit(limit)
 
         tasks = []
+
+        self._logger.debug("Running task query: %s", query)
 
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
             async with engine.acquire() as conn:
