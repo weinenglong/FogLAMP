@@ -15,6 +15,7 @@ import time
 import uuid
 from enum import IntEnum
 from typing import Iterable, List, Tuple, Union
+import os
 
 import aiopg.sa
 import sqlalchemy
@@ -30,7 +31,8 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # Module attributes
-_CONNECTION_STRING = "host='/tmp/' dbname='foglamp' user='foglamp'"
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+_CONNECTION_STRING = "host='{}/tmp/' dbname='foglamp' user='foglamp'".format(_USER_DATA_ENV)
 
 
 class NotReadyError(RuntimeError):

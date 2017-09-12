@@ -9,6 +9,7 @@
 # import logging
 import aiopg.sa
 import sqlalchemy as sa
+import os
 
 from foglamp import logger
 
@@ -28,7 +29,8 @@ _statistics_tbl = sa.Table(
 )
 """Defines the table that data will be used for CRUD operations"""
 
-_connection_string = "user='foglamp' host='/tmp/' dbname='foglamp'"
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+_connection_string = "user='foglamp' host='{}/tmp/' dbname='foglamp'".format(_USER_DATA_ENV)
 _logger = logger.setup(__name__)
 
 async def _update_statistics_value(statistics_key, value_increment):

@@ -12,6 +12,7 @@ import logging
 import time
 import uuid
 from typing import List, Union
+import os
 
 import asyncpg
 import dateutil.parser
@@ -31,7 +32,8 @@ _LOGGER = logger.setup(__name__)  # type: logging.Logger
 # _LOGGER = logger.setup(__name__, destination=logger.CONSOLE, level=logging.DEBUG)
 
 _STATISTICS_WRITE_FREQUENCY_SECONDS = 5
-__CONNECTION = {'user': 'foglamp', 'host': '/tmp/', 'database': 'foglamp'}
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+__CONNECTION = {'user': 'foglamp', 'host': '{}/tmp/'.format(_USER_DATA_ENV), 'database': 'foglamp'}
 
 class Ingest(object):
     """Adds sensor readings to FogLAMP

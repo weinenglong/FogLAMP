@@ -38,13 +38,15 @@ Supports a number of REST API:
 import asyncpg
 import json
 from aiohttp import web
+import os
 
 __author__ = "Mark Riddoch"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
 __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
-__CONNECTION = {'user': 'foglamp', 'host': '/tmp/', 'database': 'foglamp'}
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+__CONNECTION = {'user': 'foglamp', 'host': '{}/tmp/'.format(_USER_DATA_ENV), 'database': 'foglamp'}
 __DEFAULT_LIMIT = 20
 __DEFAULT_OFFSET = 0
 __TIMESTAMP_FMT = 'YYYY-MM-DD HH24:MI:SS.MS'

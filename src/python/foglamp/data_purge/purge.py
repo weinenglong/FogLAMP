@@ -37,6 +37,7 @@ import datetime
 import sqlalchemy
 import sqlalchemy.dialects.postgresql
 import time
+import os
 from foglamp import configuration_manager
 from foglamp import statistics
 
@@ -47,7 +48,8 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # Create Connection
-__CONNECTION_STRING = "postgresql://foglamp/foglamp?host=/tmp/"
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+__CONNECTION_STRING = "postgresql://foglamp/foglamp?host={}/tmp/".format(_USER_DATA_ENV)
 __CONNECTION = {'user': 'foglamp'}
 
 __ENGINE = sqlalchemy.create_engine(engine = sqlalchemy.create_engine(__CONNECTION_STRING, connect_args=__CONNECTION, pool_size=5, max_overflow=0)

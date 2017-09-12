@@ -11,6 +11,7 @@ used to execute SELECT statements against statistics, and INSERT against the sta
 """
 import sqlalchemy
 import sqlalchemy.dialects
+import os
 from datetime import datetime
 
 __author__ = "Ori Shadmon"
@@ -21,7 +22,8 @@ __version__ = "${VERSION}"
 
 # Set variables for connecting to database
 __CONNECTION = {'user': 'foglamp'}
-_CONNECTION_STRING = "postgresql://foglamp/foglamp?host=/tmp/"
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+_CONNECTION_STRING = "postgresql://foglamp/foglamp?host={}/tmp/".format(_USER_DATA_ENV)
 
 
 # Deceleration of tables in SQLAlchemy format

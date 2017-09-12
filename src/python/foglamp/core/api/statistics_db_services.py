@@ -8,6 +8,7 @@
 """
 
 import asyncpg
+import os
 from collections import OrderedDict
 
 __author__ = "Amarendra Kumar Sinha"
@@ -15,7 +16,8 @@ __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
 __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
-__CONNECTION = {'user': 'foglamp', 'host': '/tmp/', 'database': 'foglamp'}
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+__CONNECTION = {'user': 'foglamp', 'host': '{}/tmp/'.format(_USER_DATA_ENV), 'database': 'foglamp'}
 
 async def read_statistics():
     """Fetch statistics snap shot from statistics table"""

@@ -17,6 +17,7 @@ Note :
 import json
 import time
 import requests
+import os
 
 from foglamp import logger
 
@@ -35,7 +36,8 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # FIXME: it will be removed using the DB layer
-_CONNECTION_STRING = "user='foglamp' host='/tmp/' dbname='foglamp'"
+_USER_DATA_ENV = os.environ['SNAP_USER_DATA']
+_CONNECTION_STRING = "user='foglamp' host='{}/tmp/' dbname='foglamp'".format(_USER_DATA_ENV)
 """DB references"""
 
 _module_name = "statistics_to_pi"
