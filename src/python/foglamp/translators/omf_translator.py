@@ -31,7 +31,7 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # FIXME: it will be removed using the DB layer
-_DB_URL = 'postgresql:///foglamp'
+_CONNECTION_STRING = "user='foglamp' host='/tmp/' dbname='foglamp'"
 """DB references"""
 
 _module_name = "OMF Translator"
@@ -806,7 +806,7 @@ async def send_data_to_picromf():
     data_to_send = []
 
     try:
-        _pg_conn = psycopg2.connect(_DB_URL)
+        _pg_conn = psycopg2.connect(_CONNECTION_STRING)
         _pg_cur = _pg_conn.cursor()
 
         position = position_read()

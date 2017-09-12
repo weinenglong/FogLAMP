@@ -47,8 +47,10 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # Create Connection
-__CONNECTION_STRING = "postgres:///foglamp"
-__ENGINE = sqlalchemy.create_engine(__CONNECTION_STRING, pool_size=5, max_overflow=0)
+__CONNECTION_STRING = "postgresql://foglamp/foglamp?host=/tmp/"
+__CONNECTION = {'user': 'foglamp'}
+
+__ENGINE = sqlalchemy.create_engine(engine = sqlalchemy.create_engine(__CONNECTION_STRING, connect_args=__CONNECTION, pool_size=5, max_overflow=0)
 _DEFAULT_PURGE_CONFIG = {
     "age": {
         "description": "Age of data to be retained, all data that is older than this value will be removed," +

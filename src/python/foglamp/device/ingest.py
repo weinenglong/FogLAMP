@@ -31,7 +31,7 @@ _LOGGER = logger.setup(__name__)  # type: logging.Logger
 # _LOGGER = logger.setup(__name__, destination=logger.CONSOLE, level=logging.DEBUG)
 
 _STATISTICS_WRITE_FREQUENCY_SECONDS = 5
-
+__CONNECTION = {'user': 'foglamp', 'host': '/tmp/', 'database': 'foglamp'}
 
 class Ingest(object):
     """Adds sensor readings to FogLAMP
@@ -297,7 +297,7 @@ class Ingest(object):
 
                 try:
                     if connection is None:
-                        connection = await asyncpg.connect(database='foglamp')
+                        connection = await asyncpg.connect(**__CONNECTION)
                         # Create a temp table for 'copy' command
                         await connection.execute('create temp table t_readings '
                                                  'as select asset_code, user_ts, read_key, reading '

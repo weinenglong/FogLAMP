@@ -30,7 +30,7 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 # Module attributes
-_CONNECTION_STRING = "dbname='foglamp'"
+_CONNECTION_STRING = "host='/tmp/' dbname='foglamp' user='foglamp'"
 
 
 class NotReadyError(RuntimeError):

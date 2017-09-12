@@ -33,7 +33,7 @@ _configuration_tbl = sa.Table(
 """Defines the table that data will be used for CRUD operations"""
 
 _valid_type_strings = ['boolean', 'integer', 'string', 'IPv4', 'IPv6', 'X509 certificate', 'password', 'JSON']
-_connection_string = "dbname='foglamp'"
+_connection_string = "user='foglamp' host='/tmp/' dbname='foglamp'"
 # _logger = logging.getLogger(__name__)
 _logger = logger.setup(__name__)
 

@@ -44,7 +44,7 @@ __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
 __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
-__DB_NAME = 'foglamp'
+__CONNECTION = {'user': 'foglamp', 'host': '/tmp/', 'database': 'foglamp'}
 __DEFAULT_LIMIT = 20
 __DEFAULT_OFFSET = 0
 __TIMESTAMP_FMT = 'YYYY-MM-DD HH24:MI:SS.MS'
@@ -69,7 +69,7 @@ async def asset_counts(request):
     SELECT asset_code, count(*) FROM readings GROUP BY asset_code;
     """
 
-    conn = await asyncpg.connect(database=__DB_NAME)
+    conn = await asyncpg.connect(**__CONNECTION)
 
     # Select the assets from the readings table
     rows = await conn.fetch(
@@ -95,7 +95,7 @@ async def asset(request):
     SELECT to_char(user_ts, '__TIMESTAMP_FMT') as "timestamp", (reading)::jsonFROM readings WHERE asset_code = 'asset_code' ORDER BY user_ts DESC LIMIT 20 OFFSET 0
     """
 
-    conn = await asyncpg.connect(database=__DB_NAME)
+    conn = await asyncpg.connect(**__CONNECTION)
     asset_code = request.match_info.get('asset_code', '')
 
     query = """
@@ -152,7 +152,7 @@ async def asset_reading(request):
     SELECT to_char(user_ts, '__TIMESTAMP_FMT') as "Time", reading->>'reading' FROM readings WHERE asset_code = 'asset_code' ORDER BY user_ts DESC LIMIT 20 OFFSET 0
     """
 
-    conn = await asyncpg.connect(database=__DB_NAME)
+    conn = await asyncpg.connect(**__CONNECTION)
     asset_code = request.match_info.get('asset_code', '')
     reading = request.match_info.get('reading', '')
 
@@ -210,7 +210,7 @@ async def asset_summary(request):
     SELECT min(reading->>'reading'), max(reading->>'reading'), avg((reading->>'reading')::float) FROM readings WHERE asset_code = 'asset_code'
     """
 
-    conn = await asyncpg.connect(database=__DB_NAME)
+    conn = await asyncpg.connect(**__CONNECTION)
     asset_code = request.match_info.get('asset_code', '')
     reading = request.match_info.get('reading', '')
 
@@ -256,7 +256,7 @@ async def asset_averages(request):
     SELECT user_ts avg((reading->>'reading')::float) FROM readings WHERE asset_code = 'asset_code' GROUP BY user_ts
     """
 
-    conn = await asyncpg.connect(database=__DB_NAME)
+    conn = await asyncpg.connect(**__CONNECTION)
     asset_code = request.match_info.get('asset_code', '')
     reading = request.match_info.get('reading', '')
 
