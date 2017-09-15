@@ -10,7 +10,6 @@
 import random
 import aiopg.sa
 import pytest
-import allure
 import sqlalchemy as sa
 
 from foglamp.statistics import update_statistics_value
