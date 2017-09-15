@@ -117,7 +117,7 @@ INSERT INTO foglamp.statistics ( key, description, value, previous_value )
 
 insert into foglamp.scheduled_processes (name, script) values ('device', '["python3", "-m", "foglamp.device"]');
 insert into foglamp.scheduled_processes (name, script) values ('purge', '["python3", "-m", "foglamp.data_purge"]');
-insert into foglamp.scheduled_processes (name, script) values ('stats collector', '["python3", "-m", "foglamp.update_statistics_history"]');
+insert into foglamp.scheduled_processes (name, script) values ('stats collector', '["python3", "-m", "foglamp.statistics_history"]');
 insert into foglamp.scheduled_processes (name, script) values ('sending process', '["python3", "-m", "foglamp.sending_process", "-s", "1", "-d", "1"]');
 -- FogLAMP statistics into PI
 insert into foglamp.scheduled_processes (name, script) values ('statistics to pi','["python3", "-m", "foglamp.sending_process", "-s", "2", "-d", "1"]');
