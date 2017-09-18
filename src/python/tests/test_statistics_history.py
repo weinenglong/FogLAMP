@@ -92,7 +92,7 @@ async def _update_statistics_value(values: dict)->dict:
 
 @pytest.mark.asyncio
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 async def test_init_data():
     """
     Test that the functions defined for testing behave as expected
@@ -162,7 +162,7 @@ async def test_init_data():
 
 
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 def test_get_key_list():
     """
     Test that_get_key_list function works properly
@@ -181,7 +181,7 @@ def test_get_key_list():
 
 
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 def test_select_from_statistics():
     """
     Test that _select_from_statistics method works
@@ -199,7 +199,7 @@ def test_select_from_statistics():
 
 
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 def test_insert_into_stats_history():
     """
     Test _insert_into_stats_history method
@@ -237,7 +237,7 @@ def test_insert_into_stats_history():
 
 
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 def test_update_previous_value():
     """
     Test that previous_value in foglamp.statistics gets updated
@@ -261,7 +261,7 @@ def test_update_previous_value():
 
 
 @pytest.allure.feature("unit")
-@pytest.allure.story("statistics history")
+@pytest.allure.story("statistics_history")
 def test_stats_history_main():
     """
     Test full update of statistics_history table by calling _stat_history_main
