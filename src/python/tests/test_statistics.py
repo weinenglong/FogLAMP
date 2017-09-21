@@ -8,11 +8,11 @@
 
 # import logging
 import asyncio
+import os
 import random
 import aiopg.sa
 import pytest
 import sqlalchemy as sa
-import os
 from foglamp.statistics import update_statistics_value
 
 __author__ = "Ori Shadmon"
@@ -36,6 +36,7 @@ _KEYS = []
 pytestmark = pytest.mark.asyncio
 
 async def set_in_keys():
+    """Set statistics.keys column into a list to be used by test cases"""
     stmt = sa.select([_STATISTICS_TBL.c.key])
     try:
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
@@ -48,7 +49,15 @@ async def set_in_keys():
 @pytest.allure.feature("unit")
 @pytest.allure.story("statistics")
 class TestStatistics:
+    """
+    Test the different components of src/python/foglamp/statistics_history.py
+    """
+
     def setup_method(self):
+        """
+        Set up each test with fresh data, and _KEYS dictionary with
+        values from statistics.key column
+        """
         _KEYS.clear()
         os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
         os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
@@ -56,6 +65,7 @@ class TestStatistics:
         event_loop.run_until_complete(set_in_keys())
 
     def teardown_method(self):
+        """Set up each test with fresh data, and empty _KEYS dictionary"""
         _KEYS.clear()
         os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
         os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
@@ -101,8 +111,10 @@ class TestStatistics:
             await update_statistics_value(statistics_key=key, value_increment=rand_value[0])
             await update_statistics_value(statistics_key=key, value_increment=rand_value[1])
 
-            stmt = sa.select([_STATISTICS_TBL.c.value, _STATISTICS_TBL.c.previous_value]).select_from(_STATISTICS_TBL).where(
-                _STATISTICS_TBL.c.key == key)
+            stmt = sa.select([_STATISTICS_TBL.c.value,
+                              _STATISTICS_TBL.c.previous_value]
+                            ).select_from(_STATISTICS_TBL).where(
+                                _STATISTICS_TBL.c.key == key)
             try:
                 async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
                     async with engine.acquire() as conn:
@@ -129,4 +141,3 @@ class TestStatistics:
                         assert result[0] == 0
         except Exception:
             raise
-
