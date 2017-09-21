@@ -5,13 +5,16 @@
 # FOGLAMP_END
 
 """Core server module"""
-
+import os
 import signal
 import asyncio
+
+import sys
 from aiohttp import web
 
 from foglamp import logger
 from foglamp.core import routes
+from foglamp.core import routes_core
 from foglamp.core import middleware
 from foglamp.core.scheduler import Scheduler
 
@@ -47,7 +50,7 @@ class Server:
         await cls.scheduler.start()
 
     @classmethod
-    def start(cls):
+    def _start(cls):
         """Starts the server"""
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.ensure_future(cls._start_scheduler()))
@@ -62,6 +65,42 @@ class Server:
 
         # https://aiohttp.readthedocs.io/en/stable/_modules/aiohttp/web.html#run_app
         web.run_app(cls._make_app(), host='0.0.0.0', port=8082)
+
+    @staticmethod
+    def _make_core():
+        """Creates the REST server
+
+        :rtype: web.Application
+        """
+        core = web.Application(middlewares=[middleware.error_middleware])
+        routes_core.setup(core)
+        return core
+
+    @classmethod
+    def start(cls):
+        try:
+            import setproctitle
+            setproctitle.setproctitle('management')
+            pid = os.fork()
+            if pid != 0:
+                # Start Management API
+                web.run_app(cls._make_core(), host='0.0.0.0', port=8083)
+            else:
+                import setproctitle
+                setproctitle.setproctitle('storage')
+                pid = os.fork()
+                if pid != 0:
+                    # Start Storage
+                    from foglamp.core.storage_server.storage import Storage
+                    Storage.start()
+                else:
+                    # Start foglamp
+                    import setproctitle
+                    setproctitle.setproctitle('foglamp')
+                    cls._start()
+        except Exception as e:
+            sys.stderr.write(format(str(e)) + "\n");
+            sys.exit(1)
 
     @classmethod
     async def _stop(cls, loop):

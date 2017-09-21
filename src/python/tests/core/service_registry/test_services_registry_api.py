@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 
 # Module attributes
 __DB_NAME = "foglamp"
-BASE_URL = 'http://localhost:8082/foglamp'
+BASE_URL = 'http://localhost:8083/foglamp'
 headers = {'Content-Type': 'application/json'}
 
 
