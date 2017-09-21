@@ -74,7 +74,6 @@ class Storage:
 
         from subprocess import call
         call(['python3', '-m', 'foglamp.core.storage_server'])
-        # os.system('python3 -m foglamp.core.storage_server')
 
     @classmethod
     def start(cls):
@@ -90,13 +89,21 @@ class Storage:
         else:
             # If it is desirable to output the pid to the console,
             # os.getpid() reports the wrong pid so it's not easy.
+            pid = os.fork()
+            if pid == 0:
+                cls._start_server()
+                # TODO: Take care of steps to properly daemonzie the above
+
+            # TODO: create storage pid file in ~/var/run/storage.pid
             cls.register_storage()
-            cls._start_server()
+
+            # TODO: kill this process as it is no longer required
 
     @classmethod
     def register_storage(cls):
         print("Registering Storage")
-        # register the service to test the code
+
+        # TODO: First ping storage service to get below "data" response which then will be used to register with Management api
         data = {"type": "Storage", "name": "Storage Services 1", "address": "127.0.0.1", "port": 8084}
 
         r = requests.post('http://localhost:8083/foglamp/service', data=json.dumps(data), headers={'Content-Type': 'application/json'})
@@ -109,6 +116,7 @@ class Storage:
     def test_storage(cls):
         while True:
             print("Testing Storage")
+            time.sleep(5)
 
     @classmethod
     def stop(cls, pid=None):

@@ -77,27 +77,23 @@ class Server:
         return core
 
     @classmethod
+    def _run_management_api(cls):
+        web.run_app(cls._make_core(), host='0.0.0.0', port=8083)
+
+    @classmethod
     def start(cls):
         try:
-            import setproctitle
-            setproctitle.setproctitle('management')
-            pid = os.fork()
-            if pid != 0:
-                # Start Management API
-                web.run_app(cls._make_core(), host='0.0.0.0', port=8083)
-            else:
-                import setproctitle
-                setproctitle.setproctitle('storage')
-                pid = os.fork()
-                if pid != 0:
-                    # Start Storage
-                    from foglamp.core.storage_server.storage import Storage
-                    Storage.start()
-                else:
-                    # Start foglamp
-                    import setproctitle
-                    setproctitle.setproctitle('foglamp')
-                    cls._start()
+            from multiprocessing import Process
+            # TODO: Investigate why name is not changing
+            m = Process(target=cls._run_management_api, name='management')
+            m.start()
+
+            from foglamp.core.storage_server.storage import Storage
+            # TODO: Investigate why name is not changing
+            s = Process(target=Storage.start, name='storage')
+            s.start()
+
+            cls._start()
         except Exception as e:
             sys.stderr.write(format(str(e)) + "\n");
             sys.exit(1)
