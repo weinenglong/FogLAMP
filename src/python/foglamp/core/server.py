@@ -8,10 +8,12 @@
 import os
 import signal
 import asyncio
-
+import setproctitle
 import sys
-from aiohttp import web
 
+import time
+from aiohttp import web
+from multiprocessing import Process
 from foglamp import logger
 from foglamp.core import routes
 from foglamp.core import routes_core
@@ -83,17 +85,30 @@ class Server:
     @classmethod
     def start(cls):
         try:
-            from multiprocessing import Process
-            # TODO: Investigate why name is not changing
-            m = Process(target=cls._run_management_api, name='management')
-            m.start()
+            try:
+                setproctitle.setproctitle('management')
+                m = Process(target=cls._run_management_api, name='management')
+                m.start()
+                # Allow Management core api to start
+                time.sleep(5)
+            except OSError as e:
+                raise("%s [%d]".format(e.strerror, e.errno))
 
-            from foglamp.core.storage_server.storage import Storage
-            # TODO: Investigate why name is not changing
-            s = Process(target=Storage.start, name='storage')
-            s.start()
+            try:
+                setproctitle.setproctitle('storage')
+                from foglamp.core.storage_server.storage import Storage
+                s = Process(target=Storage.start, name='storage')
+                s.start()
+                # Storage.start()
+            except OSError as e:
+                raise("%s [%d]".format(e.strerror, e.errno))
 
-            cls._start()
+            try:
+                setproctitle.setproctitle('foglamp')
+                cls._start()
+            except OSError as e:
+                raise("%s [%d]".format(e.strerror, e.errno))
+
         except Exception as e:
             sys.stderr.write(format(str(e)) + "\n");
             sys.exit(1)

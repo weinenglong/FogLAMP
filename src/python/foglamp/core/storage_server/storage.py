@@ -20,6 +20,7 @@ import subprocess
 import daemon
 import requests
 from daemon import pidfile
+import setproctitle
 
 from foglamp import logger
 from foglamp.core.service_registry.service_registry import Service
@@ -67,18 +68,17 @@ class Storage:
         cls.logging_configured = True
 
     @classmethod
-    def _start_server(cls):
-        """Starts the core server"""
-
+    def run(cls):
         cls._configure_logging()
 
+        # TODO: Think of some method, other than this, to run the external command within this process, otherwise,
+        # this creates a defunct parent.
         from subprocess import call
         call(['python3', '-m', 'foglamp.core.storage_server'])
 
     @classmethod
     def start(cls):
         """Starts Storage"""
-
         cls._safe_make_dirs(_WORKING_DIR)
         cls._safe_make_dirs(os.path.dirname(_PID_PATH))
 
@@ -87,22 +87,18 @@ class Storage:
         if pid:
             print("Storage is already running in PID {}".format(pid))
         else:
-            # If it is desirable to output the pid to the console,
-            # os.getpid() reports the wrong pid so it's not easy.
             pid = os.fork()
             if pid == 0:
-                cls._start_server()
-                # TODO: Take care of steps to properly daemonzie the above
+                cls.run()
+            else:
+                # TODO: create storage pid file in ~/var/run/storage.pid
+                cls.register_storage()
 
-            # TODO: create storage pid file in ~/var/run/storage.pid
-            cls.register_storage()
-
-            # TODO: kill this process as it is no longer required
+                # As this is a separate process, its utility ends here.
+                sys.exit(0)
 
     @classmethod
     def register_storage(cls):
-        print("Registering Storage")
-
         # TODO: First ping storage service to get below "data" response which then will be used to register with Management api
         data = {"type": "Storage", "name": "Storage Services 1", "address": "127.0.0.1", "port": 8084}
 
@@ -116,7 +112,7 @@ class Storage:
     def test_storage(cls):
         while True:
             print("Testing Storage")
-            time.sleep(5)
+            time.sleep(15)
 
     @classmethod
     def stop(cls, pid=None):
