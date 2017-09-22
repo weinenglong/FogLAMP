@@ -132,6 +132,12 @@ class Daemon(object):
         if not stopped:
             raise TimeoutError("Unable to stop FogLAMP")
 
+        from foglamp.core.server import Server
+        Server.stop_management()
+
+        from foglamp.core.storage_server.storage import Storage
+        Storage.stop()
+
         print("FogLAMP stopped")
 
     @classmethod

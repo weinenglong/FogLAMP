@@ -73,8 +73,13 @@ class Storage:
 
         # TODO: Think of some method, other than this, to run the external command within this process, otherwise,
         # this creates a defunct parent.
-        from subprocess import call
-        call(['python3', '-m', 'foglamp.core.storage_server'])
+        from subprocess import Popen
+        p = Popen(['python3', '-m', 'foglamp.core.storage_server'])
+        p.poll()
+
+        # Create storage pid in ~/var/run/storage.pid
+        with open(_PID_PATH, 'w') as pid_file:
+            pid_file.write(str(p.pid))
 
     @classmethod
     def start(cls):
@@ -91,9 +96,7 @@ class Storage:
             if pid == 0:
                 cls.run()
             else:
-                # TODO: create storage pid file in ~/var/run/storage.pid
                 cls.register_storage()
-
                 # As this is a separate process, its utility ends here.
                 sys.exit(0)
 
@@ -146,6 +149,8 @@ class Storage:
 
         if not stopped:
             raise TimeoutError("Unable to stop Storage")
+
+        os.remove(_PID_PATH)
 
         print("Storage stopped")
 

@@ -20,12 +20,19 @@ from foglamp.core import routes_core
 from foglamp.core import middleware
 from foglamp.core.scheduler import Scheduler
 
-__author__ = "Praveen Garg, Terris Linenbach"
+__author__ = "Praveen Garg, Terris Linenbach, Amarendra K Sinha"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
 __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 _LOGGER = logger.setup(__name__)  # logging.Logger
+_MANAGEMENT_PID_PATH = os.path.expanduser('~/var/run/management.pid')
+_WORKING_DIR = os.path.expanduser('~/var/log')
+
+_WAIT_STOP_SECONDS = 5
+"""How many seconds to wait for the core server process to stop"""
+_MAX_STOP_RETRY = 5
+"""How many times to send TERM signal to core server process when stopping"""
 
 
 class Server:
@@ -89,8 +96,13 @@ class Server:
                 setproctitle.setproctitle('management')
                 m = Process(target=cls._run_management_api, name='management')
                 m.start()
+
+                # Create storage pid in ~/var/run/storage.pid
+                with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
+                    pid_file.write(str(m.pid))
+
                 # Allow Management core api to start
-                time.sleep(5)
+                time.sleep(3)
             except OSError as e:
                 raise("%s [%d]".format(e.strerror, e.errno))
 
@@ -99,7 +111,6 @@ class Server:
                 from foglamp.core.storage_server.storage import Storage
                 s = Process(target=Storage.start, name='storage')
                 s.start()
-                # Storage.start()
             except OSError as e:
                 raise("%s [%d]".format(e.strerror, e.errno))
 
@@ -112,6 +123,62 @@ class Server:
         except Exception as e:
             sys.stderr.write(format(str(e)) + "\n");
             sys.exit(1)
+
+    @staticmethod
+    def get_management_pid():
+        """Returns FogLAMP's process id or None if FogLAMP is not running"""
+
+        try:
+            with open(_MANAGEMENT_PID_PATH, 'r') as pid_file:
+                pid = int(pid_file.read().strip())
+        except (IOError, ValueError):
+            return None
+
+        # Delete the pid file if the process isn't alive
+        # there is an unavoidable race condition here if another
+        # process is stopping or starting the daemon
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            os.remove(_MANAGEMENT_PID_PATH)
+            pid = None
+
+        return pid
+
+    @classmethod
+    def stop_management(cls, pid=None):
+        """Stops Storage if it is running
+
+        Args:
+            pid: Optional process id to stop. If not specified, the pidfile is read.
+
+        Raises TimeoutError:
+            Unable to stop Storage. Wait and try again.
+        """
+        if not pid:
+            pid = cls.get_management_pid()
+
+        if not pid:
+            print("Management API is not running")
+            return
+
+        stopped = False
+
+        try:
+            for _ in range(_MAX_STOP_RETRY):
+                os.kill(pid, signal.SIGTERM)
+
+                for _ in range(_WAIT_STOP_SECONDS):  # Ignore the warning
+                    os.kill(pid, 0)
+                    time.sleep(1)
+                    os.remove(_MANAGEMENT_PID_PATH)
+        except OSError:
+            stopped = True
+
+        if not stopped:
+            raise TimeoutError("Unable to stop Management API")
+
+        print("Management API stopped")
 
     @classmethod
     async def _stop(cls, loop):
@@ -135,3 +202,9 @@ class Server:
             task.cancel()
 
         loop.stop()
+
+        cls.stop_management()
+
+        from foglamp.core.storage_server.storage import Storage
+        Storage.stop()
+
