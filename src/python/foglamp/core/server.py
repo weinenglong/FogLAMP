@@ -97,6 +97,9 @@ class Server:
                 m = Process(target=cls._run_management_api, name='management')
                 m.start()
 
+                from foglamp.core.storage_server.storage import Storage
+                Storage._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
+
                 # Create storage pid in ~/var/run/storage.pid
                 with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
                     pid_file.write(str(m.pid))
