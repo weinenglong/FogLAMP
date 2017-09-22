@@ -48,12 +48,13 @@ class TestConfigMgr:
         asyncio.get_event_loop().run_until_complete(add_master_data())
         from subprocess import call
         call(["foglamp", "start"])
-        time.sleep(4)
+        time.sleep(10)
 
     @classmethod
     def teardown_class(cls):
         from subprocess import call
         call(["foglamp", "stop"])
+        time.sleep(5)
         asyncio.get_event_loop().run_until_complete(delete_master_data())
 
     def setup_method(self, method):
