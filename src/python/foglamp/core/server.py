@@ -93,12 +93,12 @@ class Server:
     def start(cls):
         try:
             try:
+                from foglamp.core.storage_server.storage import Storage
+                Storage._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
+
                 setproctitle.setproctitle('management')
                 m = Process(target=cls._run_management_api, name='management')
                 m.start()
-
-                from foglamp.core.storage_server.storage import Storage
-                Storage._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
 
                 # Create storage pid in ~/var/run/storage.pid
                 with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
@@ -107,7 +107,7 @@ class Server:
                 # Allow Management core api to start
                 time.sleep(3)
             except OSError as e:
-                raise("%s [%d]".format(e.strerror, e.errno))
+                raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
 
             try:
                 setproctitle.setproctitle('storage')
@@ -115,13 +115,13 @@ class Server:
                 s = Process(target=Storage.start, name='storage')
                 s.start()
             except OSError as e:
-                raise("%s [%d]".format(e.strerror, e.errno))
+                raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
 
             try:
                 setproctitle.setproctitle('foglamp')
                 cls._start()
             except OSError as e:
-                raise("%s [%d]".format(e.strerror, e.errno))
+                raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
 
         except Exception as e:
             sys.stderr.write(format(str(e)) + "\n");
