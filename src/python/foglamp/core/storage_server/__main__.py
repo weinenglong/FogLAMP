@@ -5,7 +5,7 @@
 # See: http://foglamp.readthedocs.io/
 # FOGLAMP_END
 
-"""Core server starter"""
+"""Storage server starter. Purely for demo purpose. Should be removed in final commit."""
 
 from foglamp.core.storage_server.storage import Storage
 

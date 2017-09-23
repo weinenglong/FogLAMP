@@ -93,8 +93,8 @@ class Server:
     def start(cls):
         try:
             try:
-                from foglamp.core.storage_server.storage import Storage
-                Storage._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
+                from foglamp.core.server_daemon import Daemon
+                Daemon._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
 
                 setproctitle.setproctitle('management')
                 m = Process(target=cls._run_management_api, name='management')

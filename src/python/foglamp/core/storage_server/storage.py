@@ -5,11 +5,7 @@
 # See: http://foglamp.readthedocs.io/
 # FOGLAMP_END
 
-"""Starts the FogLAMP core service as a daemon
-
-This module can not be called 'daemon' because it conflicts
-with the third-party daemon module
-"""
+"""Starts the FogLAMP Storage service"""
 import json
 import os
 import logging
@@ -17,9 +13,7 @@ import signal
 import sys
 import time
 import subprocess
-import daemon
 import requests
-from daemon import pidfile
 import setproctitle
 
 from foglamp import logger
@@ -42,19 +36,6 @@ _MAX_STOP_RETRY = 5
 class Storage:
     logging_configured = False
     """Set to true when it's safe to use logging"""
-
-    @staticmethod
-    def _safe_make_dirs(path):
-        """Creates any missing parent directories
-
-        :param path: The path of the directory to create
-        """
-
-        try:
-            os.makedirs(path, 0o750)
-        except OSError as exception:
-            if not os.path.exists(path):
-                raise exception
 
     @classmethod
     def _configure_logging(cls):
@@ -84,8 +65,10 @@ class Storage:
     @classmethod
     def start(cls):
         """Starts Storage"""
-        cls._safe_make_dirs(_WORKING_DIR)
-        cls._safe_make_dirs(os.path.dirname(_PID_PATH))
+
+        from foglamp.core.server_daemon import Daemon
+        Daemon._safe_make_dirs(_WORKING_DIR)
+        Daemon._safe_make_dirs(os.path.dirname(_PID_PATH))
 
         pid = cls.get_pid()
 
@@ -195,6 +178,3 @@ class Storage:
         else:
             print("Storage is not running")
             sys.exit(2)
-
-if __name__ == '__main__':
-    Storage.test_storage()
