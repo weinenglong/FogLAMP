@@ -29,8 +29,21 @@ _KEYS = []
 
 pytestmark = pytest.mark.asyncio
 
+async def truncate_statistics_history():
+    """delete data from statistics_history"""
+    async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+        async with engine.acquire() as conn:
+            await conn.execute(_STATS_HISTORY_TABLE.delete())
+
+async def reset_statistics():
+    """reset statistics table to be set to 0"""
+    stmt = _STATS_TABLE.update().values(value=0, previous_value=0)
+    async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+        async with engine.acquire() as conn:
+            await conn.execute(stmt)
+
 async def set_in_keys():
-    """Set statistics.keys column into a list to be used by test cases"""
+    """Set statistics.keys column into a list to be usessd by test cases"""
     stmt = sa.select([_STATS_TABLE.c.key])
     async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
         async with engine.acquire() as conn:
@@ -43,22 +56,21 @@ class TestStatisticsHistory:
     """
     Test the different components of src/python/foglamp/statistics.py
     """
-
     def setup_method(self):
         """
         Set up each test with fresh data, and _KEYS dictionary with
         values from statistics.key column
         """
         _KEYS.clear()
-        os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
-        os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
         asyncio.get_event_loop().run_until_complete(set_in_keys())
+        asyncio.get_event_loop().run_until_complete(truncate_statistics_history())
+        asyncio.get_event_loop().run_until_complete(reset_statistics())
 
     def teardown_method(self):
         """Set up each test with fresh data, and empty _KEYS dictionary"""
+        asyncio.get_event_loop().run_until_complete(truncate_statistics_history())
+        asyncio.get_event_loop().run_until_complete(reset_statistics())
         _KEYS.clear()
-        os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
-        os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
 
     async def test_get_key_list(self):
         """
@@ -88,7 +100,6 @@ class TestStatisticsHistory:
             async with engine.acquire() as conn:
                 async for result in conn.execute(stmt):
                     assert result[0] == rand_value
-
 
     async def test_update_statistics_previous_value(self):
         """
