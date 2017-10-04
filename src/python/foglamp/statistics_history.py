@@ -58,7 +58,7 @@ _STATS_HISTORY_TABLE = sqlalchemy.Table('statistics_history', sqlalchemy.MetaDat
                                         )
 
 
-def _list_stats_keys() -> list:
+def list_stats_keys() -> list:
     """
     generate a list of distinct keys from statistics table 
     Returns:
@@ -79,16 +79,7 @@ def _list_stats_keys() -> list:
     return key_list
 
 
-def list_stats_keys() -> list:
-    """
-    Execute _list_stats_keys
-    :return:
-        list of distinct keys
-    """
-    return _list_stats_keys()
-
-
-def _insert_into_stats_history(key: str, value: int, history_ts: datetime):
+def insert_into_stats_history(key: str, value: int, history_ts: datetime):
     """
     INSERT values in statistics_history
     :arg:
@@ -107,19 +98,7 @@ def _insert_into_stats_history(key: str, value: int, history_ts: datetime):
     conn.close()
 
 
-def insert_into_stats_history(key: str='', value: int=0,
-                              history_ts: datetime=datetime.now()):
-    """
-    Execute _insert_into_stats_history
-    :arg:
-        key (str): corresponding stats_key_value
-        value (int): delta between `value` and `prev_val`
-        history_ts (datetime): timestamp that row was affected
-    """
-    _insert_into_stats_history(key, value, history_ts)
-
-
-def _update_previous_value(key: str, value: int):
+def update_previous_value(key: str, value: int):
     """
     Update previous_value of column to have the same value as snapshot
     :arg:
@@ -137,17 +116,7 @@ def _update_previous_value(key: str, value: int):
     conn.close()
 
 
-def update_previous_value(key: str='', value: int=0):
-    """
-    Execute _update_previous_value
-     :arg:
-        key (str): Key which previous_value gets update
-        value (int): value at snapshot
-    """
-    _update_previous_value(key, value)
-
-
-def _select_from_statistics(key: str) -> (int, int):
+def select_from_statistics(key: str) -> (int, int):
     """
     SELECT data from statistics for the statistics_history table
     :arg:
@@ -166,17 +135,6 @@ def _select_from_statistics(key: str) -> (int, int):
     conn.close()
     results = results.fetchall()[0]
     return results[0], results[1]
-
-
-def select_from_statistics(key: str) -> (int, int):
-    """
-    Execute _select_from_statistics
-    :arg:
-        key (str): The row name update is executed against (WHERE condition)
-    :return:
-        The integer value of statistics.value and statistics.previous_value
-    """
-    return _select_from_statistics(key)
 
 
 def stats_history_main():
