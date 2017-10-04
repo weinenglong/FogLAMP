@@ -68,18 +68,15 @@ def list_stats_keys() -> list:
     stmt = sqlalchemy.select([_STATS_TABLE.c.key.distinct()]).select_from(_STATS_TABLE)
     engine = sqlalchemy.create_engine(_CONNECTION_STRING, pool_size=5, max_overflow=0)
     conn = engine.connect()
-    try:
-        results = conn.execute(stmt)
-    except Exception:
-        _logger.exception("Failed to retrieve keys from statistics table")
-        raise
+    results = conn.execute(stmt)
+    conn.close()
     for result in results.fetchall():
         key_list.append(result[0].strip())
-    conn.close()
     return key_list
 
 
-def insert_into_stats_history(key: str, value: int, history_ts: datetime):
+def insert_into_stats_history(key: str='', value: int=0,
+                              history_ts: datetime=datetime.nowW()):
     """
     INSERT values in statistics_history
     :arg:
@@ -90,15 +87,11 @@ def insert_into_stats_history(key: str, value: int, history_ts: datetime):
     stmt = _STATS_HISTORY_TABLE.insert().values(key=key, value=value, history_ts=history_ts)
     engine = sqlalchemy.create_engine(_CONNECTION_STRING, pool_size=5, max_overflow=0)
     conn = engine.connect()
-    try:
-        conn.execute(stmt)
-    except Exception:
-        _logger.exception("Failed to insert values into statistics_history table")
-        raise
+    conn.execute(stmt)
     conn.close()
 
 
-def update_previous_value(key: str, value: int):
+def update_previous_value(key: str='', value: int=0):
     """
     Update previous_value of column to have the same value as snapshot
     :arg:
@@ -108,15 +101,11 @@ def update_previous_value(key: str, value: int):
     stmt = _STATS_TABLE.update().values(previous_value=value).where(_STATS_TABLE.c.key == key)
     engine = sqlalchemy.create_engine(_CONNECTION_STRING, pool_size=5, max_overflow=0)
     conn = engine.connect()
-    try:
-        conn.execute(stmt)
-    except Exception:
-        _logger.exception("Failed to update previous_value into statistics table")
-        raise
+    conn.execute(stmt)
     conn.close()
 
 
-def select_from_statistics(key: str) -> (int, int):
+def select_from_statistics(key: str='') -> (int, int):
     """
     SELECT data from statistics for the statistics_history table
     :arg:
@@ -127,11 +116,7 @@ def select_from_statistics(key: str) -> (int, int):
     stmt = sqlalchemy.select([_STATS_TABLE.c.value, _STATS_TABLE.c.previous_value]).where(_STATS_TABLE.c.key == key)
     engine = sqlalchemy.create_engine(_CONNECTION_STRING, pool_size=5, max_overflow=0)
     conn = engine.connect()
-    try:
-        results = conn.execute(stmt)
-    except Exception:
-        _logger.exception("Failed to retrieve value and previous_value from statistics table")
-        raise
+    results = conn.execute(stmt)
     conn.close()
     results = results.fetchall()[0]
     return results[0], results[1]
@@ -139,23 +124,18 @@ def select_from_statistics(key: str) -> (int, int):
 
 def stats_history_main():
     """
-    1. SELECT against the  statistics table, to get a snapshot of the data at that moment. 
-    Based on the snapshot: 
-        1. INSERT the delta between `value` and `previous_value` into  statistics_history
-        2. UPDATE the previous_value in statistics table to be equal to statistics.value at snapshot 
+    
     """
 
     # List of distinct statistics.keys values
     stats_key_value_list = list_stats_keys()
+
     # set history_ts
     stmt = sqlalchemy.select([sqlalchemy.func.now()])
     engine = sqlalchemy.create_engine(_CONNECTION_STRING, pool_size=5, max_overflow=0)
     conn = engine.connect()
-    try:
-        results = conn.execute(stmt)
-    except Exception:
-        _logger.exception("Failed to retrieve CURRENT_TIMESTAMP")
-        raise
+    results = conn.execute(stmt)
+    conn.close()
     for result in results.fetchall():
         history_ts = result[0]
 
