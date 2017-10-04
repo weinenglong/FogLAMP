@@ -14,8 +14,8 @@ import aiopg.sa
 
 from foglamp.statistics import update_statistics_value
 from foglamp.statistics_history import (_STATS_TABLE, _STATS_HISTORY_TABLE,
-                                        _list_stats_keys, _insert_into_stats_history,
-                                        _update_previous_value, _select_from_statistics,
+                                        list_stats_keys, insert_into_stats_history,
+                                        update_previous_value, select_from_statistics,
                                         stats_history_main)
 
 __author__ = "Ori Shadmon"
@@ -68,9 +68,9 @@ class TestStatisticsHistory:
 
     def teardown_method(self):
         """Set up each test with fresh data, and empty _KEYS dictionary"""
-        asyncio.get_event_loop().run_until_complete(truncate_statistics_history())
-        asyncio.get_event_loop().run_until_complete(reset_statistics())
-        _KEYS.clear()
+        # asyncio.get_event_loop().run_until_complete(truncate_statistics_history())
+        # asyncio.get_event_loop().run_until_complete(reset_statistics())
+        # _KEYS.clear()
 
     async def test_get_key_list(self):
         """
@@ -79,7 +79,7 @@ class TestStatisticsHistory:
         :assert:
              The sorted list of keys returned is equal to the keys currently retreived
         """
-        result = _list_stats_keys()
+        result = list_stats_keys()
         assert sorted(result) == sorted(_KEYS)
 
     async def test_insert_into_stats_history(self):
@@ -87,19 +87,27 @@ class TestStatisticsHistory:
         Test that _insert_into_stats_history updates the value per key
         :assert:
             Assert statistics_history.value == rand_value for a given key
+            Assert statistics_history.history_ts = history_ts
         """
         key = random.choice(_KEYS)
         rand_value = random.randint(1, 10)
+        # set history_ts
+        stmt = sa.select([sa.func.now()])
+        async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+            async with engine.acquire() as conn:
+                async for result in conn.execute(stmt):
+                    history_ts = result[0]
+        insert_into_stats_history(key=key, value=rand_value,
+                                   history_ts=history_ts)
 
-        stmt = sa.select([_STATS_HISTORY_TABLE.c.value]).where(
+        stmt = sa.select([_STATS_HISTORY_TABLE.c.value,
+                          _STATS_HISTORY_TABLE.c.history_ts]).where(
             _STATS_HISTORY_TABLE.c.key == key)
-        _insert_into_stats_history(key=key, value=rand_value,
-                                   history_ts=str(datetime.datetime.now()))
-
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
             async with engine.acquire() as conn:
                 async for result in conn.execute(stmt):
                     assert result[0] == rand_value
+                    assert result[1] == history_ts
 
     async def test_update_statistics_previous_value(self):
         """
@@ -112,28 +120,43 @@ class TestStatisticsHistory:
         """
         key = random.choice(_KEYS)
         rand_value = random.randint(1, 10)
-        _update_previous_value(key=key, value=rand_value)
-        result = _select_from_statistics(key=key)[0]
-        assert result[0] == 0
-        assert result[1] == rand_value
+        update_previous_value(key=key, value=rand_value)
+        value, previous_value = select_from_statistics(key=key)
+        assert value == 0
+        assert previous_value == rand_value
 
     async def test_stats_history_main(self):
         """
-        Test that as a whole (statistics_history_main) executes properaly
+        Test that as a whole (statistics_history_main) executes properly
         :assert:
-            values in statistics.value, statistics.previous_value, and
-            statistics_history.value get updated
+            1. Assert statistics.value and statistics.previous_value
+            are the same
+            2. Assert statistcs_history.value is the same as
+            statistics.previous_value
+            3. history_ts is consistent
         """
-        key = random.choice(_KEYS)
-        rand_value = random.randint(1, 10)
-        await update_statistics_value(statistics_key=key, value_increment=rand_value)
+        expected_value = {}
+        for key in _KEYS:
+            expected_value[key] = random.randint(1,10)
+            await update_statistics_value(statistics_key=key,
+                                          value_increment=expected_value[key])
         stats_history_main()
-        result = _select_from_statistics(key=key)[0]
-        assert all(x == rand_value for x in result)
-
-        stmt2 = sa.select([_STATS_HISTORY_TABLE.c.value]).where(
-            _STATS_HISTORY_TABLE.c.key == key)
+        for key in _KEYS:
+            value, previous_value = select_from_statistics(key=key)
+            assert value == expected_value[key]
+            assert previous_value == expected_value[key]
+            stmt = sa.select([_STATS_HISTORY_TABLE.c.value]).where(
+                _STATS_HISTORY_TABLE.c.key == key)
+            async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+                async with engine.acquire() as conn:
+                    async for result in conn.execute(stmt):
+                        assert result[0] == expected_value[key]
+        history_ts_result = []
+        stmt = sa.select([_STATS_HISTORY_TABLE.c.history_ts])
         async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
             async with engine.acquire() as conn:
-                async for result in conn.execute(stmt2):
-                    assert result[0] == rand_value
+                async for result in conn.execute(stmt):
+                    history_ts_result.append(result[0])
+
+        assert all(map(lambda x: x == history_ts_result[0], history_ts_result)) is True
+
