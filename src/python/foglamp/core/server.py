@@ -29,8 +29,6 @@ _LOGGER = logger.setup(__name__)  # logging.Logger
 
 _MANAGEMENT_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
 _STORAGE_PID_PATH =  os.getenv('STORAGE_PID_PATH', os.path.expanduser('~/var/run/storage.pid'))
-_STORAGE_URL =  os.getenv('STORAGE_URL', os.path.expanduser('http://localhost:8080'))
-_MANAGEMENT_URL =  os.getenv('MANAGEMENT_URL', os.path.expanduser('http://localhost:8081'))
 
 _WAIT_STOP_SECONDS = 5
 """How many seconds to wait for the core server process to stop"""
@@ -73,24 +71,6 @@ class Server:
                 raise exception
 
     """ Management API """
-    @classmethod
-    def check_service_availibility(cls):
-        """ ping Management service """
-
-        l = requests.get(_MANAGEMENT_URL + '/foglamp/service/ping')
-
-        # TODO: log error with message if status is 4xx or 5xx
-        if l.status_code in range(400, 500):
-            _LOGGER.error("Client error code: %d", l.status_code)
-            raise RuntimeError("Client error code: {}".format(l.status_code))
-
-        if l.status_code in range(500, 600):
-            _LOGGER.error("Server error code: %d", l.status_code)
-            raise RuntimeError("Server error code: {}".format(l.status_code))
-
-        res = dict(l.json())
-        return res
-
     @staticmethod
     def _make_core():
         """Creates the REST server
@@ -163,24 +143,6 @@ class Server:
 
 
     """ Storage Services """
-    @classmethod
-    def check_storage_availibility(cls):
-        """ ping Storage service """
-
-        l = requests.get(_STORAGE_URL + '/storage/ping')
-
-        # TODO: log error with message if status is 4xx or 5xx
-        if l.status_code in range(400, 500):
-            _LOGGER.error("Client error code: %d", l.status_code)
-            raise RuntimeError("Client error code: {}".format(l.status_code))
-
-        if l.status_code in range(500, 600):
-            _LOGGER.error("Server error code: %d", l.status_code)
-            raise RuntimeError("Server error code: {}".format(l.status_code))
-
-        res = dict(l.json())
-        return res
-
     @staticmethod
     def get_storage_pid():
         """Returns Storage's process id or None if Storage is not running"""
@@ -324,26 +286,13 @@ class Server:
                 # Create management pid in ~/var/run/storage.pid
                 with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
                     pid_file.write(str(m.pid))
+
+                # Allow Management core api to start
+                # TODO: Is there a more controlled way of starting... waiting 3 seconds may not be enough.
+                # Perhaps start and poll or ping?
+                time.sleep(3)
             except OSError as e:
                 raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-            # Check if Management core api has started
-            try:
-                time_left = 10  # 10 seconds enough?
-                while time_left:
-                    time.sleep(1)
-                    try:
-                        ping_response = cls.check_service_availibility()
-                        break
-                    except RuntimeError as e:
-                        # Let us try again
-                        pass
-                    time_left -= 1
-
-                if not time_left:
-                    raise RuntimeError("Problem encountered in starting Management API")
-            except RuntimeError as e:
-                raise Exception(str(e))
 
             # Start Storage Service
             print("Starting Storage Services")
@@ -352,25 +301,6 @@ class Server:
                 cls.start_storage()
             except OSError as e:
                 raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-            # Check if Storage Services has started
-            # TODO: Uncomment below when real storage service is started
-            # try:
-            #     time_left = 10  # 10 seconds enough?
-            #     while time_left:
-            #         time.sleep(1)
-            #         try:
-            #             ping_response = cls.check_storage_availibility()
-            #             break
-            #         except RuntimeError as e:
-            #             # Let us try again
-            #             pass
-            #         time_left -= 1
-            #
-            #     if not time_left:
-            #         raise RuntimeError("Problem encountered in starting Storage Services")
-            # except RuntimeError as e:
-            #     raise Exception(str(e))
 
             # Start Foglamp Server
             print("Starting FogLAMP")
