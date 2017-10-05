@@ -5,18 +5,15 @@
 # See: http://foglamp.readthedocs.io/
 # FOGLAMP_END
 import asyncio
-import datetime
-import os
-import pytest
 import random
+import pytest
 import sqlalchemy as sa
 import aiopg.sa
 
 from foglamp.statistics import update_statistics_value
 from foglamp.statistics_history import (_STATS_TABLE, _STATS_HISTORY_TABLE,
-                                        list_stats_keys, insert_into_stats_history,
-                                        update_previous_value, select_from_statistics,
-                                        stats_history_main)
+                                        list_stats_keys, update_previous_value,
+                                        select_from_statistics, stats_history_main)
 
 __author__ = "Ori Shadmon"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
@@ -98,12 +95,6 @@ class TestStatisticsHistory:
             4. Assert that statistics_history.history_ts is consistent
         """
         history_ts_result = []
-        # set history_ts
-        stmt = sa.select([sa.func.now()])
-        async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
-            async with engine.acquire() as conn:
-                async for result in conn.execute(stmt):
-                    history_ts = result[0]
 
         # set statistics.value
         for key in _KEYS:
@@ -120,8 +111,8 @@ class TestStatisticsHistory:
             # assert previous_value was update
             assert value == previous_value
             stmt = sa.select([_STATS_HISTORY_TABLE.c.value,
-                          _STATS_HISTORY_TABLE.c.history_ts]).where(
-                _STATS_HISTORY_TABLE.c.key == key)
+                              _STATS_HISTORY_TABLE.c.history_ts]).where(
+                                  _STATS_HISTORY_TABLE.c.key == key)
 
             async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
                 async with engine.acquire() as conn:
@@ -130,7 +121,7 @@ class TestStatisticsHistory:
                         history_ts_result.append(result[1])
         assert all(map(lambda x: x == history_ts_result[0], history_ts_result)) is True
 
-    async def test_statistics_history_multiple_updates(self):
+    async def test_multi_update_statistics_history_main(self):
         """
         Test the proper update of statistics_history.value after
         multiple updates to statistics.value
@@ -147,9 +138,12 @@ class TestStatisticsHistory:
         previous_value = select_from_statistics(key)[1]
 
         # multiple updates of statistics.value
-        for i in range(3):
-            await update_statistics_value(statistics_key=key,
-                                          value_increment=random.randint(1, 10))
+        await update_statistics_value(statistics_key=key,
+                                      value_increment=random.randint(1, 10))
+        await update_statistics_value(statistics_key=key,
+                                      value_increment=random.randint(1, 10))
+
+        # execute stats_history_main & check statistics_history.value
         stats_history_main()
         value = select_from_statistics(key)[0]
         stmt = sa.select([_STATS_HISTORY_TABLE.c.value]).where(
@@ -158,4 +152,3 @@ class TestStatisticsHistory:
             async with engine.acquire() as conn:
                 async for result in conn.execute(stmt):
                     assert result[0] == value - previous_value
-

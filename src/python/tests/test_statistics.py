@@ -25,16 +25,20 @@ _KEYS = []
 
 pytestmark = pytest.mark.asyncio
 
+async def reset_statistics():
+    """reset statistics table to be set to 0"""
+    stmt = _statistics_tbl.update().values(value=0, previous_value=0)
+    async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+        async with engine.acquire() as conn:
+            await conn.execute(stmt)
+
 async def set_in_keys():
     """Set statistics.keys column into a list to be used by test cases"""
     stmt = sa.select([_statistics_tbl.c.key])
-    try:
-        async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
-            async with engine.acquire() as conn:
-                async for result in conn.execute(stmt):
-                    _KEYS.append(result[0].replace(" ", ""))
-    except Exception:
-        raise
+    async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+        async with engine.acquire() as conn:
+            async for result in conn.execute(stmt):
+                _KEYS.append(result[0].replace(" ", ""))
 
 @pytest.allure.feature("unit")
 @pytest.allure.story("statistics")
@@ -49,15 +53,13 @@ class TestStatistics:
         values from statistics.key column
         """
         _KEYS.clear()
-        os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
-        os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
+        asyncio.get_event_loop().run_until_complete(reset_statistics())
         asyncio.get_event_loop().run_until_complete(set_in_keys())
 
     def teardown_method(self):
         """Set up each test with fresh data, and empty _KEYS dictionary"""
         _KEYS.clear()
-        # os.system("psql < `locate foglamp_ddl.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
-        # os.system("psql < `locate foglamp_init_data.sql | grep 'FogLAMP/src/sql'` > /dev/null 2>&1")
+        asyncio.get_event_loop().run_until_complete(reset_statistics())
 
     async def test_update_value(self):
         """
@@ -66,21 +68,19 @@ class TestStatistics:
             1. value gets update with new rand_value
             2. previous value does not change
         """
-        for key in _KEYS:
-            rand_value = random.randint(1, 10)
-            await update_statistics_value(statistics_key=key, value_increment=rand_value)
-            stmt = sa.select([_statistics_tbl.c.value,
-                              _statistics_tbl.c.previous_value]).where(
-                _statistics_tbl.c.key == key)
-            async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
-                async with engine.acquire() as conn:
-                    async for result in conn.execute(stmt):
-                        assert result[0] == rand_value
-                        assert result[1] == 0
+        key = random.choice(_KEYS)
+        rand_value = random.randint(1, 10)
+        await update_statistics_value(statistics_key=key, value_increment=rand_value)
+        stmt = sa.select([_statistics_tbl.c.value]).where(_statistics_tbl.c.key == key)
+        async with aiopg.sa.create_engine(_CONNECTION_STRING) as engine:
+            async with engine.acquire() as conn:
+                async for result in conn.execute(stmt):
+                    assert result[0] == rand_value
 
     async def test_update_consecutive_values(self):
         """
-        Test that with multiple vauvaluesle updates, new update gets added
+        Test that with multiple values updates, new update gets added, rather
+        than replaced
         :assert:
             _statistics_tbl.c.value == sum(rand_value) 
         """
@@ -103,7 +103,8 @@ class TestStatistics:
         """
         with pytest.raises(TypeError) as error_exec:
             await update_statistics_value(value_increment=random.randint(1,10))
-        assert "TypeError: update_statistics_value() missing 1 required positional argument: 'statistics_key'" in str(error_exec)
+        assert ("TypeError: update_statistics_value() missing 1 required " +
+                "positional argument: 'statistics_key'") in str(error_exec)
 
     async def test_update_statistics_value_empty_value(self):
         """
@@ -114,4 +115,5 @@ class TestStatistics:
         key = random.choice(_KEYS)
         with pytest.raises(TypeError) as error_exec:
             await update_statistics_value(statistics_key=key)
-        assert "TypeError: update_statistics_value() missing 1 required positional argument: 'value_increment'" in str(error_exec)
+        assert ("TypeError: update_statistics_value() missing 1 required " +
+                "positional argument: 'value_increment'") in str(error_exec)
