@@ -76,7 +76,7 @@ def list_stats_keys() -> list:
 
 
 def insert_into_stats_history(key: str='', value: int=0,
-                              history_ts: datetime=datetime.nowW()):
+                              history_ts: datetime=datetime.now()):
     """
     INSERT values in statistics_history
     :arg:
@@ -123,8 +123,8 @@ def select_from_statistics(key: str='') -> (int, int):
 
 
 def stats_history_main():
-    """
-    
+    """Call each component as needed to update statistcs.previous_value,
+    and insert into statistics_history
     """
 
     # List of distinct statistics.keys values
