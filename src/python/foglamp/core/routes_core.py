@@ -4,7 +4,6 @@
 # See: http://foglamp.readthedocs.io/
 # FOGLAMP_END
 
-from aiohttp import web
 from foglamp.core.service_registry import service_registry
 
 __author__ = "Amarendra K Sinha"

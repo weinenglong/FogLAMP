@@ -14,15 +14,15 @@ with the third-party daemon module
 import os
 import logging
 import signal
-import subprocess
 import sys
 import time
 import daemon
 import setproctitle
+import requests
 from daemon import pidfile
 from multiprocessing import Process
-
-from foglamp.core.server import Server, _MANAGEMENT_PID_PATH, _STORAGE_SHUTDOWN_URL
+from foglamp.core.server import Server, _MANAGEMENT_PID_PATH, _STORAGE_SHUTDOWN_URL, _MANAGEMENT_BASE_URL, _STORAGE_BASE_URL
+from foglamp.core.service_registry import service_registry
 from foglamp import logger
 
 __author__ = "Amarendra K Sinha, Terris Linenbach"
@@ -95,27 +95,32 @@ class Daemon(object):
                 try:
                     cls._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
                     setproctitle.setproctitle('management')
-
-                    # Disable print temporarily
-                    sys.stdout = open(os.devnull, 'w')
-
                     # Process used instead of subprocess as it allows a python method to run in a separate process.
                     m = Process(target=Server._run_management_api, name='management')
                     m.start()
 
-                    # Enable print
-                    sys.stdout = sys.__stdout__
-
                     # Create management pid in ~/var/run/storage.pid
                     with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
                         pid_file.write(str(m.pid))
-
-                    # Allow Management core api to start
-                    # TODO: Is there a more controlled way of starting... waiting 3 seconds may not be enough.
-                    #       Perhaps start and poll or ping?
-                    time.sleep(3)
                 except OSError as e:
                     raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
+
+                # Before proceeding further, do a healthcheck for Management API
+                try:
+                    time_left = 10  # 10 seconds enough?
+                    while time_left:
+                        time.sleep(1)
+                        try:
+                            retval = service_registry.check_service_availibility(_MANAGEMENT_BASE_URL)
+                            break
+                        except RuntimeError as e:
+                            # Let us try again
+                            pass
+                        time_left -= 1
+                    if not time_left:
+                        raise RuntimeError("Unable to start Management API")
+                except RuntimeError as e:
+                    raise Exception(str(e))
 
                 # Start Storage Service
                 print("Starting Storage Services")
@@ -124,6 +129,24 @@ class Daemon(object):
                     Server.start_storage()
                 except OSError as e:
                     raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
+
+                # Before proceeding further, do a healthcheck for Storage Services
+                try:
+                    time_left = 10  # 10 seconds enough?
+                    while time_left:
+                        time.sleep(1)
+                        try:
+                            retval = service_registry.check_service_availibility(_STORAGE_BASE_URL)
+                            break
+                        except RuntimeError as e:
+                            # Let us try again
+                            pass
+                        time_left -= 1
+
+                    if not time_left:
+                        raise RuntimeError("Unable to start Storage Services")
+                except RuntimeError as e:
+                    raise Exception(str(e))
 
                 # Start Foglamp Server
                 print("Starting FogLAMP")
@@ -137,7 +160,7 @@ class Daemon(object):
                 ):
                     cls._start_server()
             except Exception as e:
-                sys.stderr.write(format(str(e)) + "\n")
+                sys.stderr.write('Error: '+format(str(e)) + "\n")
                 sys.exit(1)
 
     @classmethod
@@ -180,9 +203,9 @@ class Daemon(object):
         # Stop Storage Services next
         # TODO: Investigate why Server.stop_storage() is not working here
         try:
-            subprocess.run(['curl', '-X', 'POST', _STORAGE_SHUTDOWN_URL], check=True)
-        except subprocess.CalledProcessError as err:
-            raise TimeoutError("Unable to stop Storage. Error: {}".format(str(err)))
+            l = requests.post(_STORAGE_SHUTDOWN_URL)
+        except Exception as err:
+            stopped = True
 
         print("Storage Service stopped")
 

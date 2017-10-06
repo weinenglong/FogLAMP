@@ -4,15 +4,12 @@
 # See: http://foglamp.readthedocs.io/
 # FOGLAMP_END
 
-from aiohttp import web
-
 from foglamp.core.api import audit as api_audit
 from foglamp.core.api import browser
 from foglamp.core.api import common as api_common
 from foglamp.core.api import configuration as api_configuration
 from foglamp.core.api import scheduler as api_scheduler
 from foglamp.core.api import statistics as api_statistics
-from foglamp.core.service_registry import service_registry
 
 __author__ = "Ashish Jabble, Praveen Garg"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
