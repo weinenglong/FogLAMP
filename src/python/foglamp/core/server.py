@@ -36,7 +36,7 @@ _MAX_STOP_RETRY = 5
 
 
 class Server:
-    """Core server"""
+    """FOGLamp core server. Starts the FogLAMP scheduler and the FogLAMP REST server."""
 
     """Class attributes"""
     scheduler = None
@@ -62,7 +62,6 @@ class Server:
     def _start(cls):
         """Starts the server"""
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.ensure_future(cls._start_scheduler()))
 
         # Register signal handlers
         # Registering SIGTERM creates an error at shutdown. See
@@ -72,8 +71,11 @@ class Server:
                 signal_name,
                 lambda: asyncio.ensure_future(cls._stop(loop)))
 
+        # The scheduler must start first because the REST API interacts with it
+        loop.run_until_complete(asyncio.ensure_future(cls._start_scheduler()))
+
         # https://aiohttp.readthedocs.io/en/stable/_modules/aiohttp/web.html#run_app
-        web.run_app(cls._make_app(), host='0.0.0.0', port=8082)
+        web.run_app(cls._make_app(), host='0.0.0.0', port=8082, handle_signals=False)
 
     @staticmethod
     def _make_core():
@@ -186,9 +188,6 @@ class Server:
 
         If the scheduler stops successfully, the event loop is
         stopped.
-
-        Raises TimeoutError:
-            A task is still running. Wait and try again.
         """
         if cls.scheduler:
             try:
@@ -196,6 +195,7 @@ class Server:
                 cls.scheduler = None
             except TimeoutError:
                 _LOGGER.exception('Unable to stop the scheduler')
+                return
 
         # Cancel asyncio tasks
         for task in asyncio.Task.all_tasks():
