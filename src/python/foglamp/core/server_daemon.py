@@ -14,6 +14,7 @@ with the third-party daemon module
 import os
 import logging
 import signal
+import subprocess
 import sys
 import time
 import daemon
@@ -21,7 +22,7 @@ import setproctitle
 from daemon import pidfile
 from multiprocessing import Process
 
-from foglamp.core.server import Server, _MANAGEMENT_PID_PATH
+from foglamp.core.server import Server, _MANAGEMENT_PID_PATH, _STORAGE_SHUTDOWN_URL
 from foglamp import logger
 
 __author__ = "Amarendra K Sinha, Terris Linenbach"
@@ -177,7 +178,13 @@ class Daemon(object):
         print("FogLAMP stopped")
 
         # Stop Storage Services next
-        Server.stop_storage()
+        # TODO: Investigate why Server.stop_storage() is not working here
+        try:
+            subprocess.run(['curl', '-X', 'POST', _STORAGE_SHUTDOWN_URL], check=True)
+        except subprocess.CalledProcessError as err:
+            raise TimeoutError("Unable to stop Storage. Error: {}".format(str(err)))
+
+        print("Storage Service stopped")
 
         # Stop Management API last
         Server.stop_management()

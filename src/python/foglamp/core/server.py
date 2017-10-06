@@ -12,6 +12,7 @@ import setproctitle
 import sys
 import time
 import requests
+import subprocess
 from aiohttp import web
 from multiprocessing import Process
 from foglamp import logger
@@ -28,7 +29,18 @@ __version__ = "${VERSION}"
 _LOGGER = logger.setup(__name__)  # logging.Logger
 
 _MANAGEMENT_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
+_MANAGEMENT_IP = os.getenv('MANAGEMENT_IP', os.path.expanduser('localhost'))
+_MANAGEMENT_PORT = os.getenv('MANAGEMENT_PORT', os.path.expanduser('8081'))
+_MANAGEMENT_PING_URL = os.path.expanduser('http://{}:{}/foglamp/service/ping'.format(_MANAGEMENT_IP, _MANAGEMENT_PORT))
+
+_STORAGE_PATH =  os.getenv('STORAGE_PATH', os.path.expanduser('~/Development/FogLAMP/src/python'))
 _STORAGE_PID_PATH =  os.getenv('STORAGE_PID_PATH', os.path.expanduser('~/var/run/storage.pid'))
+_STORAGE_IP = os.getenv('STORAGE_IP', os.path.expanduser('192.168.1.205'))
+_STORAGE_PORT = os.getenv('STORAGE_PORT', os.path.expanduser('8080'))
+_STORAGE_PING_PORT = os.getenv('STORAGE_PING_PORT', os.path.expanduser('1081'))
+_STORAGE_URL = os.path.expanduser('http://{}:{}/storage'.format(_STORAGE_IP, _STORAGE_PORT))
+_STORAGE_PING_URL = os.path.expanduser('http://{}:{}/foglamp/service/ping'.format(_STORAGE_IP, _STORAGE_PING_PORT))
+_STORAGE_SHUTDOWN_URL = os.path.expanduser('http://{}:{}/foglamp/service/shutdown'.format(_STORAGE_IP, _STORAGE_PING_PORT))
 
 _WAIT_STOP_SECONDS = 5
 """How many seconds to wait for the core server process to stop"""
@@ -175,10 +187,8 @@ class Server:
         if pid:
             print("Storage is already running in PID {}".format(pid))
         else:
-            from subprocess import Popen, run
             # TODO: Change below to use real Storage Service
-            p = Popen('foglamp/core/temp_test_storage.py')
-            # p.poll()
+            p = subprocess.Popen(_STORAGE_PATH+'/storage')
 
             # Create storage pid in ~/var/run/storage.pid
             with open(_STORAGE_PID_PATH, 'w') as pid_file:
@@ -205,15 +215,11 @@ class Server:
         stopped = False
 
         try:
-            for _ in range(_MAX_STOP_RETRY):
-                os.kill(pid, signal.SIGTERM)
-
-                for _ in range(_WAIT_STOP_SECONDS):  # Ignore the warning
-                    os.kill(pid, 0)
-                    time.sleep(1)
-        except OSError:
+            completed = subprocess.run(['curl', '-X', 'POST', _STORAGE_SHUTDOWN_URL], check=True)
+        except subprocess.CalledProcessError as err:
             stopped = True
 
+        print('returncode:', completed.returncode)
         if not stopped:
             raise TimeoutError("Unable to stop Storage")
 
