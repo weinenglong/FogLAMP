@@ -29,6 +29,8 @@ __version__ = "${VERSION}"
 
 _LOGGER = logger.setup(__name__)  # logging.Logger
 
+_RESTAPI_PORT = os.getenv('RESTAPI_PORT', os.path.expanduser('8082'))
+
 _MANAGEMENT_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
 _MANAGEMENT_IP = os.getenv('MANAGEMENT_IP', os.path.expanduser('localhost'))
 _MANAGEMENT_PORT = os.getenv('MANAGEMENT_PORT', os.path.expanduser('8081'))
@@ -102,7 +104,7 @@ class Server:
 
     @classmethod
     def _run_management_api(cls):
-        web.run_app(cls._make_core(), host='0.0.0.0', port=8081)
+        web.run_app(cls._make_core(), host='0.0.0.0', port=_MANAGEMENT_PORT)
 
     @staticmethod
     def get_management_pid():
@@ -294,7 +296,7 @@ class Server:
         loop.run_until_complete(asyncio.ensure_future(cls._start_scheduler()))
 
         # https://aiohttp.readthedocs.io/en/stable/_modules/aiohttp/web.html#run_app
-        web.run_app(cls._make_app(), host='0.0.0.0', port=8082, handle_signals=False)
+        web.run_app(cls._make_app(), host='0.0.0.0', port=_RESTAPI_PORT, handle_signals=False)
 
     @classmethod
     def start(cls):
