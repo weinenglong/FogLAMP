@@ -21,7 +21,7 @@ import setproctitle
 import requests
 from daemon import pidfile
 from multiprocessing import Process
-from foglamp.core.server import Server, _MANAGEMENT_PID_PATH, _STORAGE_SHUTDOWN_URL, _MANAGEMENT_BASE_URL, _STORAGE_BASE_URL
+from foglamp.core.server import Server, _CORE_PORT, _STORAGE_SERVICE_NAME
 from foglamp.core.service_registry import service_registry
 from foglamp import logger
 
@@ -96,7 +96,7 @@ class Daemon(object):
                     cls._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
                     setproctitle.setproctitle('management')
                     # Process used instead of subprocess as it allows a python method to run in a separate process.
-                    m = Process(target=Server._run_management_api, name='management')
+                    m = Process(target=Server._run_core_api, name='management')
                     m.start()
 
                     # Create management pid in ~/var/run/storage.pid
@@ -126,7 +126,7 @@ class Daemon(object):
                 print("Starting Storage Services")
                 try:
                     setproctitle.setproctitle('storage')
-                    Server.start_storage()
+                    Server._start_storage()
                 except OSError as e:
                     raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
 
@@ -201,16 +201,21 @@ class Daemon(object):
         print("FogLAMP stopped")
 
         # Stop Storage Services next
-        # TODO: Investigate why Server.stop_storage() is not working here
+        # TODO: Investigate why Server._stop_storage() is not working here
         try:
-            l = requests.post(_STORAGE_SHUTDOWN_URL)
+            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service?name='+_STORAGE_SERVICE_NAME)
+            assert 200 == l.status_code
+
+            s = dict(l.json())
+            _STORAGE_SHUTDOWN_URL = "{}//{}:{}/foglamp/service/shutdown".format(s["protocol"], s["address"], s["management_port"])
+            retval = service_registry.check_shutdown(_STORAGE_SHUTDOWN_URL)
         except Exception as err:
             stopped = True
 
         print("Storage Service stopped")
 
         # Stop Management API last
-        Server.stop_management()
+        Server._stop_core()
 
 
     @classmethod
@@ -272,7 +277,7 @@ class Daemon(object):
 
         :raises ValueError: Invalid or missing arguments provided
         """
-
+        print(sys.argv)
         if len(sys.argv) == 1:
             raise ValueError("Usage: start|stop|restart|status")
         elif len(sys.argv) == 2:

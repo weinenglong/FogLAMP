@@ -13,6 +13,7 @@ import sys
 import time
 import requests
 import subprocess
+import socket
 from aiohttp import web
 from multiprocessing import Process
 from foglamp import logger
@@ -29,27 +30,17 @@ __version__ = "${VERSION}"
 
 _LOGGER = logger.setup(__name__)  # logging.Logger
 
-_RESTAPI_PORT = os.getenv('RESTAPI_PORT', os.path.expanduser('8082'))
+_FOGLAMP_ROOT = os.getenv('FOGLAMP_ROOT', '/home/a/Development/FogLAMP')
 
-_MANAGEMENT_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
-_MANAGEMENT_IP = os.getenv('MANAGEMENT_IP', os.path.expanduser('localhost'))
-_MANAGEMENT_PORT = os.getenv('MANAGEMENT_PORT', os.path.expanduser('8081'))
+_STORAGE_SERVICE_NAME = os.getenv('STORAGE_SERVICE_NAME', 'storage')
+_STORAGE_PATH =  os.path.expanduser(_FOGLAMP_ROOT+'/services/storage')
 
-_MANAGEMENT_BASE_URL = 'http://{}:{}'.format(_MANAGEMENT_IP, _MANAGEMENT_PORT)
-_MANAGEMENT_PING_URL = _MANAGEMENT_BASE_URL+'/foglamp/service/ping'
-_MANAGEMENT_SHUTDOWN_URL = _MANAGEMENT_BASE_URL+'/foglamp/service/shutdown'
+_CORE_PORT = None
+_STORAGE_PORT = None
+_RESTAPI_PORT = os.getenv('RESTAPI_PORT', '8082')
 
-_STORAGE_PATH =  os.getenv('STORAGE_PATH', os.path.expanduser('/home/a/Development/FogLAMP/src/python/plugins'))
+_CORE_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
 _STORAGE_PID_PATH =  os.getenv('STORAGE_PID_PATH', os.path.expanduser('~/var/run/storage.pid'))
-_STORAGE_SERVICE_NAME = os.getenv('STORAGE_SERVICE_NAME', os.path.expanduser('storage'))
-_STORAGE_IP = os.getenv('STORAGE_IP', os.path.expanduser('localhost'))
-_STORAGE_PORT = os.getenv('STORAGE_PORT', os.path.expanduser('8080'))
-_STORAGE_MANAGEMENT_PORT = os.getenv('STORAGE_PING_PORT', os.path.expanduser('1081'))
-
-_STORAGE_BASE_URL = 'http://{}:{}'.format(_STORAGE_IP, _STORAGE_MANAGEMENT_PORT)
-_STORAGE_PING_URL = _STORAGE_BASE_URL+'/foglamp/service/ping'
-_STORAGE_SHUTDOWN_URL = _STORAGE_BASE_URL+'/foglamp/service/shutdown'
-_STORAGE_URL = 'http://{}:{}/storage'.format(_STORAGE_IP, _STORAGE_PORT)
 
 _WAIT_STOP_SECONDS = 5
 """How many seconds to wait for the core server process to stop"""
@@ -79,6 +70,14 @@ class Server:
         cls.logging_configured = True
 
     @staticmethod
+    def request_available_port():
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(('localhost', 0))
+        addr, port = s.getsockname()
+        s.close()
+        return port
+
+    @staticmethod
     def _safe_make_dirs(path):
         """Creates any missing parent directories
 
@@ -103,15 +102,16 @@ class Server:
         return core
 
     @classmethod
-    def _run_management_api(cls):
-        web.run_app(cls._make_core(), host='0.0.0.0', port=_MANAGEMENT_PORT)
+    def _run_core_api(cls):
+        _CORE_PORT = cls.request_available_port()
+        server = web.run_app(cls._make_core(), host='0.0.0.0', port=_CORE_PORT)
 
     @staticmethod
-    def get_management_pid():
+    def _get_core_pid():
         """Returns FogLAMP's process id or None if FogLAMP is not running"""
 
         try:
-            with open(_MANAGEMENT_PID_PATH, 'r') as pid_file:
+            with open(_CORE_PID_PATH, 'r') as pid_file:
                 pid = int(pid_file.read().strip())
         except (IOError, ValueError):
             return None
@@ -122,13 +122,13 @@ class Server:
         try:
             os.kill(pid, 0)
         except OSError:
-            os.remove(_MANAGEMENT_PID_PATH)
+            os.remove(_CORE_PID_PATH)
             pid = None
 
         return pid
 
     @classmethod
-    def stop_management(cls, pid=None):
+    def _stop_core(cls, pid=None):
         """Stops Storage if it is running
 
         Args:
@@ -138,7 +138,7 @@ class Server:
             Unable to stop Storage. Wait and try again.
         """
         if not pid:
-            pid = cls.get_management_pid()
+            pid = cls._get_core_pid()
 
         if not pid:
             print("Management API is not running")
@@ -147,13 +147,13 @@ class Server:
         stopped = False
 
         try:
-            # Kill Services first excluding Storage which will be killed afterwards
-            l = requests.get(_MANAGEMENT_BASE_URL+'/foglamp/service')
+            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service')
             assert 200 == l.status_code
 
             retval = dict(l.json())
             svc = retval["services"]
             for s in svc:
+                # Kill Services first, excluding Storage which will be killed afterwards
                 if _STORAGE_SERVICE_NAME != s["name"]:
                     service_base_url = "{}//{}:{}/".format(s["protocol"], s["address"], s["management_port"])
                     service_shutdown_url = service_base_url+'/shutdown'
@@ -169,7 +169,7 @@ class Server:
                 for _ in range(_WAIT_STOP_SECONDS):  # Ignore the warning
                     os.kill(pid, 0)
                     time.sleep(1)
-                    os.remove(_MANAGEMENT_PID_PATH)
+                    os.remove(_CORE_PID_PATH)
         except (OSError, RuntimeError):
             stopped = True
 
@@ -181,7 +181,7 @@ class Server:
 
     """ Storage Services """
     @staticmethod
-    def get_storage_pid():
+    def _get_storage_pid():
         """Returns Storage's process id or None if Storage is not running"""
 
         try:
@@ -202,24 +202,25 @@ class Server:
         return pid
 
     @classmethod
-    def start_storage(cls):
+    def _start_storage(cls):
         """Starts Storage"""
 
         cls._safe_make_dirs(os.path.dirname(_STORAGE_PID_PATH))
 
-        pid = cls.get_storage_pid()
+        pid = cls._get_storage_pid()
 
         if pid:
             print("Storage is already running in PID {}".format(pid))
         else:
-            p = subprocess.Popen('./storage')
+            _STORAGE_PORT = cls.request_available_port()
+            p = subprocess.Popen([_STORAGE_PATH+'/storage', '--port={}'.format(_STORAGE_PORT), '--address=localhost'])
 
             # Create storage pid in ~/var/run/storage.pid
             with open(_STORAGE_PID_PATH, 'w') as pid_file:
                 pid_file.write(str(p.pid))
 
     @classmethod
-    def stop_storage(cls, pid=None):
+    def _stop_storage(cls, pid=None):
         """Stops Storage if it is running
 
         Args:
@@ -230,7 +231,7 @@ class Server:
         """
 
         if not pid:
-            pid = cls.get_storage_pid()
+            pid = cls._get_storage_pid()
 
         if not pid:
             print("Storage is not running")
@@ -239,7 +240,12 @@ class Server:
         stopped = False
 
         try:
-            l = requests.post(_STORAGE_SHUTDOWN_URL)
+            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service?name='+_STORAGE_SERVICE_NAME)
+            assert 200 == l.status_code
+
+            s = dict(l.json())
+            _STORAGE_SHUTDOWN_URL = "{}//{}:{}/foglamp/service/shutdown".format(s["protocol"], s["address"], s["management_port"])
+            retval = service_registry.check_shutdown(_STORAGE_SHUTDOWN_URL)
         except Exception as err:
             stopped = True
 
@@ -251,9 +257,9 @@ class Server:
         print("Storage stopped")
 
     @classmethod
-    def status_storage(cls):
+    def _status_storage(cls):
         """Outputs the status of the Storage process"""
-        pid = cls.get_storage_pid()
+        pid = cls._get_storage_pid()
 
         if pid:
             print("Storage is running in PID {}".format(pid))
@@ -306,14 +312,14 @@ class Server:
             # Start Management API
             print("Starting Management API")
             try:
-                cls._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
-                setproctitle.setproctitle('management')
+                cls._safe_make_dirs(os.path.dirname(_CORE_PID_PATH))
+                setproctitle.setproctitle('core')
                 # Process used instead of subprocess as it allows a python method to run in a separate process.
-                m = Process(target=cls._run_management_api, name='management')
+                m = Process(target=cls._run_core_api, name='core')
                 m.start()
 
                 # Create management pid in ~/var/run/storage.pid
-                with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
+                with open(_CORE_PID_PATH, 'w') as pid_file:
                     pid_file.write(str(m.pid))
             except OSError as e:
                 raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
@@ -339,7 +345,7 @@ class Server:
             print("Starting Storage Services")
             try:
                 setproctitle.setproctitle('storage')
-                cls.start_storage()
+                cls._start_storage()
             except OSError as e:
                 raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
 
@@ -396,7 +402,7 @@ class Server:
         loop.stop()
 
         # Stop Storage Service
-        cls.stop_storage()
+        cls._stop_storage()
 
         # Stop Management API
-        cls.stop_management()
+        cls._stop_core()
