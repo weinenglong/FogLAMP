@@ -21,7 +21,7 @@ import setproctitle
 import requests
 from daemon import pidfile
 from multiprocessing import Process
-from foglamp.core.server import Server, _CORE_PORT, _STORAGE_SERVICE_NAME
+from foglamp.core.server import Server, _STORAGE_SERVICE_NAME
 from foglamp.core.service_registry import service_registry
 from foglamp import logger
 
@@ -90,63 +90,8 @@ class Daemon(object):
             print("FogLAMP is already running in PID {}".format(pid))
         else:
             try:
-                # Start Management API
-                print("Starting Management API")
-                try:
-                    cls._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
-                    setproctitle.setproctitle('management')
-                    # Process used instead of subprocess as it allows a python method to run in a separate process.
-                    m = Process(target=Server._run_core_api, name='management')
-                    m.start()
-
-                    # Create management pid in ~/var/run/storage.pid
-                    with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
-                        pid_file.write(str(m.pid))
-                except OSError as e:
-                    raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-                # Before proceeding further, do a healthcheck for Management API
-                try:
-                    time_left = 10  # 10 seconds enough?
-                    while time_left:
-                        time.sleep(1)
-                        try:
-                            retval = service_registry.check_service_availibility(_MANAGEMENT_BASE_URL)
-                            break
-                        except RuntimeError as e:
-                            # Let us try again
-                            pass
-                        time_left -= 1
-                    if not time_left:
-                        raise RuntimeError("Unable to start Management API")
-                except RuntimeError as e:
-                    raise Exception(str(e))
-
-                # Start Storage Service
-                print("Starting Storage Services")
-                try:
-                    setproctitle.setproctitle('storage')
-                    Server._start_storage()
-                except OSError as e:
-                    raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-                # Before proceeding further, do a healthcheck for Storage Services
-                try:
-                    time_left = 10  # 10 seconds enough?
-                    while time_left:
-                        time.sleep(1)
-                        try:
-                            retval = service_registry.check_service_availibility(_STORAGE_BASE_URL)
-                            break
-                        except RuntimeError as e:
-                            # Let us try again
-                            pass
-                        time_left -= 1
-
-                    if not time_left:
-                        raise RuntimeError("Unable to start Storage Services")
-                except RuntimeError as e:
-                    raise Exception(str(e))
+                Server._start_management_service()
+                Server._start_storage_service()
 
                 # Start Foglamp Server
                 print("Starting FogLAMP")
@@ -200,23 +145,13 @@ class Daemon(object):
 
         print("FogLAMP stopped")
 
-        # Stop Storage Services next
-        # TODO: Investigate why Server._stop_storage() is not working here
-        try:
-            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service?name='+_STORAGE_SERVICE_NAME)
-            assert 200 == l.status_code
+        # Stop Management API last
+        Server._stop_management_service()
 
-            s = dict(l.json())
-            _STORAGE_SHUTDOWN_URL = "{}//{}:{}/foglamp/service/shutdown".format(s["protocol"], s["address"], s["management_port"])
-            retval = service_registry.check_shutdown(_STORAGE_SHUTDOWN_URL)
-        except Exception as err:
-            stopped = True
+        # Stop Storage Services next
+        Server._stop_storage()
 
         print("Storage Service stopped")
-
-        # Stop Management API last
-        Server._stop_core()
-
 
     @classmethod
     def restart(cls):
@@ -277,7 +212,6 @@ class Daemon(object):
 
         :raises ValueError: Invalid or missing arguments provided
         """
-        print(sys.argv)
         if len(sys.argv) == 1:
             raise ValueError("Usage: start|stop|restart|status")
         elif len(sys.argv) == 2:

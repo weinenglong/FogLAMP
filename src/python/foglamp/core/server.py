@@ -5,6 +5,7 @@
 # FOGLAMP_END
 
 """Core server module"""
+import json
 import os
 import signal
 import asyncio
@@ -21,7 +22,7 @@ from foglamp.core import routes
 from foglamp.core import routes_core
 from foglamp.core import middleware
 from foglamp.core.scheduler import Scheduler
-from foglamp.core.service_registry import service_registry
+from foglamp.core.service_registry import service_registry, instance
 
 __author__ = "Praveen Garg, Terris Linenbach, Amarendra K Sinha"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
@@ -30,16 +31,12 @@ __version__ = "${VERSION}"
 
 _LOGGER = logger.setup(__name__)  # logging.Logger
 
-_FOGLAMP_ROOT = os.getenv('FOGLAMP_ROOT', '/home/a/Development/FogLAMP')
+_FOGLAMP_ROOT = os.getenv('FOGLAMP_ROOT', '/home/asinha/Development/FogLAMP')
 
 _STORAGE_SERVICE_NAME = os.getenv('STORAGE_SERVICE_NAME', 'storage')
 _STORAGE_PATH =  os.path.expanduser(_FOGLAMP_ROOT+'/services/storage')
 
-_CORE_PORT = None
-_STORAGE_PORT = None
-_RESTAPI_PORT = os.getenv('RESTAPI_PORT', '8082')
-
-_CORE_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
+_MANAGEMENT_PID_PATH = os.getenv('MANAGEMENT_PID_PATH', os.path.expanduser('~/var/run/management.pid'))
 _STORAGE_PID_PATH =  os.getenv('STORAGE_PID_PATH', os.path.expanduser('~/var/run/storage.pid'))
 
 _WAIT_STOP_SECONDS = 5
@@ -57,6 +54,16 @@ class Server:
 
     logging_configured = False
     """Set to true when it's safe to use logging"""
+
+    # Need to be pre-decided and fixed
+    _MANAGEMENT_API_PORT = 8081
+
+    # TODO: Set below storage ports to None after Storage layer is fixed to accept these via command line arguments
+    _STORAGE_PORT = 8080
+    _STORAGE_MANAGEMENT_PORT = 1081
+
+    # TODO: Fix to accept below via discovery
+    _RESTAPI_PORT = 8082
 
     @classmethod
     def _configure_logging(cls):
@@ -92,7 +99,7 @@ class Server:
 
     """ Management API """
     @staticmethod
-    def _make_core():
+    def _make_management():
         """Creates the REST server
 
         :rtype: web.Application
@@ -102,16 +109,15 @@ class Server:
         return core
 
     @classmethod
-    def _run_core_api(cls):
-        _CORE_PORT = cls.request_available_port()
-        server = web.run_app(cls._make_core(), host='0.0.0.0', port=_CORE_PORT)
+    def _run_management_api(cls, _MANAGEMENT_PORT):
+        web.run_app(cls._make_management(), host='0.0.0.0', port=_MANAGEMENT_PORT)
 
     @staticmethod
-    def _get_core_pid():
+    def _get_management_pid():
         """Returns FogLAMP's process id or None if FogLAMP is not running"""
 
         try:
-            with open(_CORE_PID_PATH, 'r') as pid_file:
+            with open(_MANAGEMENT_PID_PATH, 'r') as pid_file:
                 pid = int(pid_file.read().strip())
         except (IOError, ValueError):
             return None
@@ -122,13 +128,53 @@ class Server:
         try:
             os.kill(pid, 0)
         except OSError:
-            os.remove(_CORE_PID_PATH)
+            os.remove(_MANAGEMENT_PID_PATH)
             pid = None
 
         return pid
 
     @classmethod
-    def _stop_core(cls, pid=None):
+    def _start_management_service(cls):
+        # Start Management API
+        print("Starting Management API")
+        try:
+            cls._safe_make_dirs(os.path.dirname(_MANAGEMENT_PID_PATH))
+            setproctitle.setproctitle('management')
+            # Process used instead of subprocess as it allows a python method to run in a separate process.
+
+            # TODO: Investigate if below line is required and remove it if _MANAGEMENT_API_PORT is going to be fixed
+            # cls._MANAGEMENT_API_PORT = cls.request_available_port()
+
+            m = Process(target=cls._run_management_api, name='core', args=(cls._MANAGEMENT_API_PORT,))
+            m.start()
+
+            # Create management pid in ~/var/run/storage.pid
+            with open(_MANAGEMENT_PID_PATH, 'w') as pid_file:
+                pid_file.write(str(m.pid))
+        except OSError as e:
+            raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
+
+        # Before proceeding further, do a healthcheck for Management API
+        try:
+            time_left = 10  # 10 seconds enough?
+            _CORE_PING_URL = "http://localhost:{}/foglamp/service/ping".format(cls._MANAGEMENT_API_PORT)
+            print(cls._MANAGEMENT_API_PORT, _CORE_PING_URL)
+            while time_left:
+                time.sleep(1)
+                try:
+                    retval = service_registry.check_service_availibility(_CORE_PING_URL)
+                    break
+                except RuntimeError as e:
+                    # Let us try again
+                    pass
+                time_left -= 1
+            if not time_left:
+                raise RuntimeError("Unable to start Management API")
+        except RuntimeError as e:
+            raise Exception(str(e))
+
+    @classmethod
+    def _stop_management_service(cls, pid=None):
         """Stops Storage if it is running
 
         Args:
@@ -138,7 +184,7 @@ class Server:
             Unable to stop Storage. Wait and try again.
         """
         if not pid:
-            pid = cls._get_core_pid()
+            pid = cls._get_management_pid()
 
         if not pid:
             print("Management API is not running")
@@ -147,7 +193,7 @@ class Server:
         stopped = False
 
         try:
-            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service')
+            l = requests.get('http://localhost:{}'.format(cls._MANAGEMENT_API_PORT) + '/foglamp/service')
             assert 200 == l.status_code
 
             retval = dict(l.json())
@@ -155,7 +201,7 @@ class Server:
             for s in svc:
                 # Kill Services first, excluding Storage which will be killed afterwards
                 if _STORAGE_SERVICE_NAME != s["name"]:
-                    service_base_url = "{}//{}:{}/".format(s["protocol"], s["address"], s["management_port"])
+                    service_base_url = "{}://{}:{}/".format(s["protocol"], s["address"], s["management_port"])
                     service_shutdown_url = service_base_url+'/shutdown'
                     retval = service_registry.check_shutdown(service_shutdown_url)
 
@@ -169,7 +215,7 @@ class Server:
                 for _ in range(_WAIT_STOP_SECONDS):  # Ignore the warning
                     os.kill(pid, 0)
                     time.sleep(1)
-                    os.remove(_CORE_PID_PATH)
+                    os.remove(_MANAGEMENT_PID_PATH)
         except (OSError, RuntimeError):
             stopped = True
 
@@ -204,20 +250,47 @@ class Server:
     @classmethod
     def _start_storage(cls):
         """Starts Storage"""
-
         cls._safe_make_dirs(os.path.dirname(_STORAGE_PID_PATH))
-
         pid = cls._get_storage_pid()
-
         if pid:
             print("Storage is already running in PID {}".format(pid))
         else:
-            _STORAGE_PORT = cls.request_available_port()
-            p = subprocess.Popen([_STORAGE_PATH+'/storage', '--port={}'.format(_STORAGE_PORT), '--address=localhost'])
+            # TODO: Uncomment below after Storage layer is fixed to accept below via command line params
+            # cls._STORAGE_PORT = cls.request_available_port()
+            p = subprocess.Popen([_STORAGE_PATH+'/storage', '--port={}'.format(cls.request_available_port()), '--address=localhost'])
 
             # Create storage pid in ~/var/run/storage.pid
             with open(_STORAGE_PID_PATH, 'w') as pid_file:
                 pid_file.write(str(p.pid))
+
+    @classmethod
+    def _start_storage_service(cls):
+        # Start Storage Service
+        print("Starting Storage Services")
+        try:
+            setproctitle.setproctitle('storage')
+            cls._start_storage()
+        except OSError as e:
+            raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
+
+        # Before proceeding further, do a healthcheck for Storage Services
+        try:
+            time_left = 10  # 10 seconds enough?
+            while time_left:
+                time.sleep(1)
+                try:
+                    _STORAGE_PING_URL = "http://localhost:{}".format(cls._STORAGE_MANAGEMENT_PORT)
+                    retval = service_registry.check_service_availibility(_STORAGE_PING_URL)
+                    break
+                except RuntimeError as e:
+                    # Let us try again
+                    pass
+                time_left -= 1
+
+            if not time_left:
+                raise RuntimeError("Unable to start Storage Services")
+        except RuntimeError as e:
+            raise Exception(str(e))
 
     @classmethod
     def _stop_storage(cls, pid=None):
@@ -240,11 +313,13 @@ class Server:
         stopped = False
 
         try:
-            l = requests.get('http://localhost:{}'.format(_CORE_PORT)+'/foglamp/service?name='+_STORAGE_SERVICE_NAME)
+            l = requests.get('http://localhost:{}'.format(cls._MANAGEMENT_API_PORT) + '/foglamp/service?name=' + _STORAGE_SERVICE_NAME)
             assert 200 == l.status_code
 
             s = dict(l.json())
-            _STORAGE_SHUTDOWN_URL = "{}//{}:{}/foglamp/service/shutdown".format(s["protocol"], s["address"], s["management_port"])
+            # TODO: Fix below 2 lines when Storage self registers itself
+            # _STORAGE_SHUTDOWN_URL = "{}://{}:{}".format(s["protocol"], s["address"], s["management_port"])
+            _STORAGE_SHUTDOWN_URL = "http://localhost:{}".format(cls._STORAGE_MANAGEMENT_PORT)
             retval = service_registry.check_shutdown(_STORAGE_SHUTDOWN_URL)
         except Exception as err:
             stopped = True
@@ -301,71 +376,20 @@ class Server:
         # The scheduler must start first because the REST API interacts with it
         loop.run_until_complete(asyncio.ensure_future(cls._start_scheduler()))
 
+        # We need to register before starting the server as the server, once started, will go into loop waiting mode,
+        # and if there is any error/exception, the main start try-catch will abort everything.
+        # instance.Service.Instances.register(cls, "admin", "admin", "localhost", cls._RESTAPI_PORT, cls._RESTAPI_PORT, protocol='http')
+
         # https://aiohttp.readthedocs.io/en/stable/_modules/aiohttp/web.html#run_app
-        web.run_app(cls._make_app(), host='0.0.0.0', port=_RESTAPI_PORT, handle_signals=False)
+        web.run_app(cls._make_app(), host='0.0.0.0', port=cls._RESTAPI_PORT, handle_signals=False)
 
     @classmethod
     def start(cls):
         cls._configure_logging()
 
         try:
-            # Start Management API
-            print("Starting Management API")
-            try:
-                cls._safe_make_dirs(os.path.dirname(_CORE_PID_PATH))
-                setproctitle.setproctitle('core')
-                # Process used instead of subprocess as it allows a python method to run in a separate process.
-                m = Process(target=cls._run_core_api, name='core')
-                m.start()
-
-                # Create management pid in ~/var/run/storage.pid
-                with open(_CORE_PID_PATH, 'w') as pid_file:
-                    pid_file.write(str(m.pid))
-            except OSError as e:
-                raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-            # Before proceeding further, do a healthcheck for Management API
-            try:
-                time_left = 10  # 10 seconds enough?
-                while time_left:
-                    time.sleep(1)
-                    try:
-                        retval = service_registry.check_service_availibility(_MANAGEMENT_PING_URL)
-                        break
-                    except RuntimeError as e:
-                        # Let us try again
-                        pass
-                    time_left -= 1
-                if not time_left:
-                    raise RuntimeError("Unable to start Management API")
-            except RuntimeError as e:
-                raise Exception(str(e))
-
-            # Start Storage Service
-            print("Starting Storage Services")
-            try:
-                setproctitle.setproctitle('storage')
-                cls._start_storage()
-            except OSError as e:
-                raise Exception("[{}] {} {} {}".format(e.errno, e.strerror, e.filename, e.filename2))
-
-            # Before proceeding further, do a healthcheck for Storage Services
-            try:
-                time_left = 10  # 10 seconds enough?
-                while time_left:
-                    time.sleep(1)
-                    try:
-                        retval = service_registry.check_service_availibility(_STORAGE_PING_URL)
-                        break
-                    except RuntimeError as e:
-                        # Let us try again
-                        pass
-                    time_left -= 1
-
-                if not time_left:
-                    raise RuntimeError("Unable to start Storage Services")
-            except RuntimeError as e:
-                raise Exception(str(e))
+            cls._start_management_service()
+            cls._start_storage_service()
 
             # Everthing ok, so now start Foglamp Server
             print("Starting FogLAMP")
@@ -405,4 +429,4 @@ class Server:
         cls._stop_storage()
 
         # Stop Management API
-        cls._stop_core()
+        cls._stop_management_service()
