@@ -1,6 +1,5 @@
-FogLAMP
--------
+# FogLAMP Demo Prepare on August 8, 2017
 
-This is the FogLAMP project.
+
 
 
