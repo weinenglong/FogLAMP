@@ -5,14 +5,14 @@
 # FOGLAMP_END
 
 """
-The following piece of code takes the information found in the statistics table, and stores it's delta value 
-(statistics.value - statistics.prev_val) inside the statistics_history table. To complete this, SQLAlchemy will be 
+The following piece of code takes the information found in the statistics table, and stores it's delta value
+(statistics.value - statistics.prev_val) inside the statistics_history table. To complete this, STORAGE Layer will be
 used to execute SELECT statements against statistics, and INSERT against the statistics_history table.  
 """
-import sqlalchemy
-import sqlalchemy.dialects
-import os
+
 from datetime import datetime
+from foglamp.storage.storage import Storage
+from foglamp.storage.payload_builder import PayloadBuilder
 
 __author__ = "Ori Shadmon"
 __copyright__ = "Copyright (c) 2017 OSI Soft, LLC"
@@ -20,56 +20,7 @@ __license__ = "Apache 2.0"
 __version__ = "${VERSION}"
 
 
-# Set variables for connecting to database
-__CONNECTION_STRING = "postgres://foglamp@/foglamp"
-try:
-  snap_user_common = os.environ['SNAP_USER_COMMON']
-  unix_socket_dir = "{}/tmp/".format(snap_user_common)
-  __CONNECTION_STRING = __CONNECTION_STRING + "?host=" + unix_socket_dir
-except KeyError:
-  pass
-
-# Deceleration of tables in SQLAlchemy format
-_STATS_TABLE = sqlalchemy.Table('statistics', sqlalchemy.MetaData(),
-                                sqlalchemy.Column('key', sqlalchemy.CHAR(10), primary_key=True),
-                                sqlalchemy.Column('description', sqlalchemy.VARCHAR('255'), default=''),
-                                sqlalchemy.Column('value', sqlalchemy.BIGINT, default=0),
-                                sqlalchemy.Column('previous_value', sqlalchemy.BIGINT, default=0),
-                                sqlalchemy.Column('ts', sqlalchemy.TIMESTAMP(6),
-                                                  default=sqlalchemy.func.current_timestamp()))
-
-"""Description of each column 
-key - Corresponding statistics.key value, so that there is awareness of what the history is of
-history_ts - the newest timestamp in statistics for that key 
-value - delta value between `value` and `prev_val` of statistics
-            The point is to know how many actions happened during the X time
-ts - current timestamp 
-"""
-_STATS_HISTORY_TABLE = sqlalchemy.Table('statistics_history', sqlalchemy.MetaData(),
-                                        sqlalchemy.Column('key', sqlalchemy.CHAR(10)),
-                                        sqlalchemy.Column('history_ts', sqlalchemy.TIMESTAMP(6),
-                                                          default=sqlalchemy.func.current_timestamp()),
-                                        sqlalchemy.Column('value', sqlalchemy.BIGINT, default=0),
-                                        sqlalchemy.Column('ts', sqlalchemy.TIMESTAMP(6),
-                                                          default=sqlalchemy.func.current_timestamp())
-                                        )
-
-
-def __query_execution(stmt=""):
-    """
-    Execute query and return result
-    Args:
-        stmt: Query being executed
-
-    Returns:
-        Result of the query 
-    """
-    
-    engine = sqlalchemy.create_engine(__CONNECTION_STRING, pool_size=20, max_overflow=0)
-    conn = engine.connect()
-    result = conn.execute(stmt)
-
-    return result
+_storage = None
 
 
 def _list_stats_keys() -> list:
@@ -78,13 +29,20 @@ def _list_stats_keys() -> list:
     Returns:
         list of distinct keys
     """
-    key_list = []
-    stmt = sqlalchemy.select([_STATS_TABLE.c.key.distinct()]).select_from(_STATS_TABLE)
-    result = __query_execution(stmt)
+    from collections import OrderedDict
+    import json
 
-    result = result.fetchall()
-    for i in range(len(result)):
-        key_list.append(str(result[i][0]).strip())
+    # TODO: Distinct support is not available
+    # So used this query "SELECT key FROM statistics GROUP BY key"
+    ret = OrderedDict()
+    ret['return'] = ["key"]
+    ret['group'] = "key"
+    payload = json.dumps(ret)
+    results = _storage.query_tbl_with_payload('statistics', payload)
+
+    key_list = []
+    for i in range(len(results['rows'])):
+        key_list.append(results["rows"][i]['key'])
 
     return key_list
 
@@ -99,8 +57,9 @@ def _insert_into_stats_history(key='', value=0, history_ts=None):
         Return the number of rows inserted. Since each process inserts only 1 row, the expected count should always 
         be 1. 
     """
-    stmt = _STATS_HISTORY_TABLE.insert().values(key=key, value=value, history_ts=history_ts)
-    __query_execution(stmt)
+    date_to_str = history_ts.strftime("%Y-%m-%d %H:%M:%S.%f")
+    payload = PayloadBuilder().INSERT(key=key, value=value, history_ts=date_to_str).payload()
+    _storage.insert_into_tbl("statistics_history", payload)
 
 
 def _update_previous_value(key='', value=0):
@@ -112,8 +71,8 @@ def _update_previous_value(key='', value=0):
         key: Key which previous_value gets update 
         value: value at snapshot
     """
-    stmt = _STATS_TABLE.update().values(previous_value=value).where(_STATS_TABLE.c.key == key)
-    __query_execution(stmt)
+    payload = PayloadBuilder().SET(previous_value=value).WHERE(["key", "=", key]).payload()
+    _storage.update_tbl("statistics", payload)
 
 
 def _select_from_statistics(key='') -> dict:
@@ -125,9 +84,9 @@ def _select_from_statistics(key='') -> dict:
     Returns:
 
     """
-    stmt = sqlalchemy.select([_STATS_TABLE.c.value, _STATS_TABLE.c.previous_value]).where(_STATS_TABLE.c.key == key)
-    result = __query_execution(stmt)
-    return result.fetchall()
+    payload = PayloadBuilder().WHERE(["key", "=", key]).payload()
+    result = _storage.query_tbl_with_payload("statistics", payload)
+    return result
 
 
 def stats_history_main():
@@ -143,14 +102,17 @@ def stats_history_main():
     current_time = datetime.now()
     for key in stats_key_value_list:
         stats_select_result = _select_from_statistics(key=key)
-        value = int(stats_select_result[0][0])
-        previous_value = int(stats_select_result[0][1])
+        value = stats_select_result["rows"][0]["value"]
+        previous_value = stats_select_result["rows"][0]["previous_value"]
         _insert_into_stats_history(key=key, value=value-previous_value, history_ts=current_time)
         _update_previous_value(key=key, value=value)
 
+
 if __name__ == '__main__':
+    _storage = Storage()
     stats_history_main()
 
+# TODO: Move below commented code to tests/ i.e FOGL-484
 # """Testing of statistics_history
 # """
 # import random
@@ -224,5 +186,3 @@ if __name__ == '__main__':
 #             print(key+": Stat History Updated - SUCCESS")
 #         else:
 #             print(key + ": Stat History Updated - FAIL")
-
-
