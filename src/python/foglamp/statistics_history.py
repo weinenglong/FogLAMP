@@ -10,9 +10,13 @@ The following piece of code takes the information found in the statistics table,
 used to execute SELECT statements against statistics, and INSERT against the statistics_history table.  
 """
 
+import sys
 from datetime import datetime
 from foglamp.storage.storage import Storage
 from foglamp.storage.payload_builder import PayloadBuilder
+from foglamp.parser import Parser
+from foglamp.parser import ArgumentParserError
+from foglamp import logger
 
 __author__ = "Ori Shadmon"
 __copyright__ = "Copyright (c) 2017 OSI Soft, LLC"
@@ -29,15 +33,15 @@ def _list_stats_keys() -> list:
     Returns:
         list of distinct keys
     """
+    # TODO: FOGL-638 Distinct support is not available from Payload builder
+    # Below dict code snippet should remove once above ticket resolved
     from collections import OrderedDict
     import json
 
-    # TODO: Distinct support is not available
-    # So used this query "SELECT key FROM statistics GROUP BY key"
-    ret = OrderedDict()
-    ret['return'] = ["key"]
-    ret['group'] = "key"
-    payload = json.dumps(ret)
+    _dict = OrderedDict()
+    _dict['modifier'] = "distinct"
+    _dict['return'] = ["key"]
+    payload = json.dumps(_dict)
     results = _storage.query_tbl_with_payload('statistics', payload)
 
     key_list = []
@@ -53,6 +57,7 @@ def _insert_into_stats_history(key='', value=0, history_ts=None):
     Args:
         key: corresponding stats_key_value 
         value: delta between `value` and `prev_val`
+        history_ts: timestamp with timezone
     Returns:
         Return the number of rows inserted. Since each process inserts only 1 row, the expected count should always 
         be 1. 
@@ -82,7 +87,7 @@ def _select_from_statistics(key='') -> dict:
         key: The row name update is executed against (WHERE condition)
 
     Returns:
-
+        dict
     """
     payload = PayloadBuilder().WHERE(["key", "=", key]).payload()
     result = _storage.query_tbl_with_payload("statistics", payload)
@@ -91,7 +96,7 @@ def _select_from_statistics(key='') -> dict:
 
 def stats_history_main():
     """
-    1. SELECT against the  statistics table, to get a snapshot of the data at that moment. 
+    1. SELECT against the  statistics table, to get a snapshot of the data at that moment.
     Based on the snapshot: 
         1. INSERT the delta between `value` and `previous_value` into  statistics_history
         2. UPDATE the previous_value in statistics table to be equal to statistics.value at snapshot 
@@ -109,10 +114,24 @@ def stats_history_main():
 
 
 if __name__ == '__main__':
-    _storage = Storage()
-    stats_history_main()
+    _logger = logger.setup("Statistics History", level=20)
 
-# TODO: Move below commented code to tests/ i.e FOGL-484
+    try:
+        core_mgt_port = Parser.get('--port')
+        core_mgt_address = Parser.get('--address')
+    except ArgumentParserError:
+        _logger.exception('Unable to parse command line argument')
+        sys.exit(1)
+
+    if core_mgt_port is None:
+        _logger.warning("Required argument '--port' is missing")
+    elif core_mgt_address is None:
+        _logger.warning("Required argument '--address' is missing")
+    else:
+        _storage = Storage(core_mgt_address, core_mgt_port)
+        stats_history_main()
+
+# TODO: Move below commented code to tests/ and use storage instead of SQLAlchemy i.e FOGL-484
 # """Testing of statistics_history
 # """
 # import random
