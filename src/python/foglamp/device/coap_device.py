@@ -46,7 +46,7 @@ def plugin_info():
             'interface': '1.0', 'config': _DEFAULT_CONFIG}
 
 
-async def plugin_init(config):
+def plugin_init(config):
     """Registers CoAP handler to accept sensor readings"""
 
     uri = config['uri']['value']
@@ -64,15 +64,15 @@ async def plugin_init(config):
     return {}
 
 
-async def plugin_run(data):
+def plugin_run(data):
     pass
 
 
-async def plugin_reconfigure(config):
+def plugin_reconfigure(config):
     pass
 
 
-async def plugin_shutdown(data):
+def plugin_shutdown(data):
     pass
 
 

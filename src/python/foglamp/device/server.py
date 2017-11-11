@@ -44,6 +44,10 @@ class Server:
     _plugin_data = None
     """The value that is returned by the plugin_init"""
 
+    # Needed if plugin is an aiohttp listener
+    _plugin_server_handler = None
+    _plugin_server = None
+
     _microservice_management_app = None
     """ web application for microservice management app """
 
@@ -64,7 +68,7 @@ class Server:
     async def _stop(cls, loop):
         if cls._plugin is not None:
             try:
-                await cls._plugin.plugin_shutdown(cls._plugin_data)
+                cls._plugin.plugin_shutdown(cls._plugin_data)
             except Exception:
                 _LOGGER.exception("Unable to shut down plugin '{}'".format(cls._plugin_name))
             finally:
@@ -95,15 +99,13 @@ class Server:
             await cfg_manager.create_category(cls._plugin_name, config, '{} Device'.format(cls._plugin_name), True)
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
-            # TODO: Examine if below code is as per Architecture
-            # try:
-            #     plugin_module_name = config['plugin']['value']
-            # except KeyError:
-            #     _LOGGER.warning("Unable to obtain configuration of module for plugin {}".format(cls._plugin_name))
-            #     raise
+            try:
+                plugin_module_name = config['plugin']['value']
+            except KeyError:
+                _LOGGER.exception("Unable to obtain configuration of module for plugin {}".format(cls._plugin_name))
+                # Retrieve the plugin name and hence plugin module name, from the params
+                plugin_module_name = cls._plugin_name
 
-            # Retrieve the plugin name and hence plugin module name, from the params
-            plugin_module_name = cls._plugin_name
             try:
                 cls._plugin = __import__("foglamp.device.{}_device".format(plugin_module_name), fromlist=[''])
             except Exception:
@@ -119,8 +121,15 @@ class Server:
 
             # TODO: Register for config changes
 
-            cls._plugin_data = await cls._plugin.plugin_init(config)
-            await cls._plugin.plugin_run(cls._plugin_data)
+            cls._plugin_data = cls._plugin.plugin_init(config)
+
+            if isinstance(cls._plugin_data, tuple):
+                # If plugin is an aiohttp listener, then return tuple (coro, handler) from plugin_init
+                coro, cls._plugin_server_handler = cls._plugin_data
+                if coro is not None:
+                    cls._plugin_server = await coro
+
+            cls._plugin.plugin_run(cls._plugin_data)
 
             await Ingest.start(cls._core_management_host,cls._core_management_port)
         except Exception:

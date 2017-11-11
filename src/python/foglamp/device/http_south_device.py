@@ -45,7 +45,7 @@ def plugin_info():
             'interface': '1.0', 'config': _DEFAULT_CONFIG}
 
 
-async def plugin_init(config):
+def plugin_init(config):
     """Registers HTTP Listener handler to accept sensor readings"""
 
     _LOGGER.info("Retrieve HTTP Listener Configuration %s", config)
@@ -53,36 +53,24 @@ async def plugin_init(config):
     uri = config['uri']['value']
     port = config['port']['value']
 
-    return {'uri': uri, 'port': port}
-
-
-async def plugin_run(data):
-    """
-
-    Args:
-        data: dict returned from plugin_init()
-
-    Returns: (server, handler) tuple
-
-    """
-    host = data['uri']
-    port = data['port']
-
     loop = asyncio.get_event_loop()
 
     app = web.Application(middlewares=[middleware.error_middleware])
-    app.router.add_route('POST', '/device', HttpSouthIngest.render_post)
+    app.router.add_route('POST', '/', HttpSouthIngest.render_post)
     handler = app.make_handler()
-    coro = loop.create_server(handler, host, port)
-    server = await coro
-    return server, handler
+    coro = loop.create_server(handler, uri, port)
+
+    return coro, handler
 
 
-async def plugin_reconfigure(config):
+def plugin_run(data):
+    pass
+
+def plugin_reconfigure(config):
     pass
 
 
-async def plugin_shutdown(data):
+def plugin_shutdown(data):
     pass
 
 
