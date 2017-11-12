@@ -64,7 +64,7 @@ def plugin_init(config):
     return {}
 
 
-def plugin_run(data):
+def plugin_start(data):
     pass
 
 

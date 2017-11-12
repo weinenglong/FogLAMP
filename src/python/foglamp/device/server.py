@@ -44,10 +44,6 @@ class Server:
     _plugin_data = None
     """The value that is returned by the plugin_init"""
 
-    # Needed if plugin is an aiohttp listener
-    _plugin_server_handler = None
-    _plugin_server = None
-
     _microservice_management_app = None
     """ web application for microservice management app """
 
@@ -68,7 +64,10 @@ class Server:
     async def _stop(cls, loop):
         if cls._plugin is not None:
             try:
-                cls._plugin.plugin_shutdown(cls._plugin_data)
+                if asyncio.iscoroutinefunction(cls._plugin.plugin_shutdown):
+                    await cls._plugin.plugin_shutdown(cls._plugin_data)
+                else:
+                    cls._plugin.plugin_shutdown(cls._plugin_data)
             except Exception:
                 _LOGGER.exception("Unable to shut down plugin '{}'".format(cls._plugin_name))
             finally:
@@ -123,13 +122,11 @@ class Server:
 
             cls._plugin_data = cls._plugin.plugin_init(config)
 
-            if isinstance(cls._plugin_data, tuple):
-                # If plugin is an aiohttp listener, then return tuple (coro, handler) from plugin_init
-                coro, cls._plugin_server_handler = cls._plugin_data
-                if coro is not None:
-                    cls._plugin_server = await coro
-
-            cls._plugin.plugin_run(cls._plugin_data)
+            if asyncio.iscoroutinefunction(cls._plugin.plugin_start):
+                # plugin_start() may return additional data which then can be used elsewhere e.g. plugin_shutdown
+                cls._plugin_data = await cls._plugin.plugin_start(cls._plugin_data)
+            else:
+                cls._plugin.plugin_start(cls._plugin_data)
 
             await Ingest.start(cls._core_management_host,cls._core_management_port)
         except Exception:

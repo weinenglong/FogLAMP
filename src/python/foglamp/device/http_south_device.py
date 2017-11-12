@@ -50,28 +50,44 @@ def plugin_init(config):
 
     _LOGGER.info("Retrieve HTTP Listener Configuration %s", config)
 
-    uri = config['uri']['value']
+    host = config['uri']['value']
     port = config['port']['value']
+
+    return {'host': host, 'port': port}
+
+
+async def plugin_start(data):
+
+    host = data['host']
+    port = data['port']
 
     loop = asyncio.get_event_loop()
 
     app = web.Application(middlewares=[middleware.error_middleware])
     app.router.add_route('POST', '/', HttpSouthIngest.render_post)
     handler = app.make_handler()
-    coro = loop.create_server(handler, uri, port)
+    coro = loop.create_server(handler, host, port)
+    server = await coro
 
-    return coro, handler
-
-
-def plugin_run(data):
-    pass
+    data['app'] = app
+    data['handler'] = handler
+    data['server'] = server
+    return data
 
 def plugin_reconfigure(config):
     pass
 
 
-def plugin_shutdown(data):
-    pass
+async def plugin_shutdown(data):
+    app = data['app']
+    handler = data['handler']
+    server = data['server']
+
+    server.close()
+    await server.wait_closed()
+    await app.shutdown()
+    await handler.shutdown(60.0)
+    await app.cleanup()
 
 
 class HttpSouthIngest():
@@ -108,7 +124,7 @@ class HttpSouthIngest():
 
         code = web.HTTPInternalServerError.status_code
         increment_discarded_counter = True
-        message = ''
+        message = {'error': 'Exception in Add readings - failed'}
 
         try:
             if not Ingest.is_available():
@@ -141,8 +157,7 @@ class HttpSouthIngest():
             message = {'error': str(e)}
             _LOGGER.exception('ValueError/TypeError in Add readings - failed')
         except Exception as e:
-            message = {'error': str(e)}
-            _LOGGER.exception('Exception in Add readings - failed')
+            _LOGGER.exception(message['error'])
 
         if increment_discarded_counter:
             Ingest.increment_discarded_readings()
