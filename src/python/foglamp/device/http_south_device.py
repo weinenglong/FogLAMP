@@ -56,7 +56,7 @@ def plugin_init(config):
     return {'host': host, 'port': port}
 
 
-async def plugin_start(data):
+def plugin_start(data):
 
     host = data['host']
     port = data['port']
@@ -67,27 +67,26 @@ async def plugin_start(data):
     app.router.add_route('POST', '/', HttpSouthIngest.render_post)
     handler = app.make_handler()
     coro = loop.create_server(handler, host, port)
-    server = await coro
+    server = asyncio.ensure_future(coro)
 
     data['app'] = app
     data['handler'] = handler
     data['server'] = server
-    return data
 
 def plugin_reconfigure(config):
     pass
 
 
-async def plugin_shutdown(data):
+def plugin_shutdown(data):
     app = data['app']
     handler = data['handler']
     server = data['server']
 
     server.close()
-    await server.wait_closed()
-    await app.shutdown()
-    await handler.shutdown(60.0)
-    await app.cleanup()
+    asyncio.ensure_future(server.wait_closed())
+    asyncio.ensure_future(app.shutdown())
+    asyncio.ensure_future(handler.shutdown(60.0))
+    asyncio.ensure_future(app.cleanup())
 
 
 class HttpSouthIngest():

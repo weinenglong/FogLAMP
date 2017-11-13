@@ -64,10 +64,7 @@ class Server:
     async def _stop(cls, loop):
         if cls._plugin is not None:
             try:
-                if asyncio.iscoroutinefunction(cls._plugin.plugin_shutdown):
-                    await cls._plugin.plugin_shutdown(cls._plugin_data)
-                else:
-                    cls._plugin.plugin_shutdown(cls._plugin_data)
+                cls._plugin.plugin_shutdown(cls._plugin_data)
             except Exception:
                 _LOGGER.exception("Unable to shut down plugin '{}'".format(cls._plugin_name))
             finally:
@@ -121,12 +118,7 @@ class Server:
             # TODO: Register for config changes
 
             cls._plugin_data = cls._plugin.plugin_init(config)
-
-            if asyncio.iscoroutinefunction(cls._plugin.plugin_start):
-                # plugin_start() may return additional data which then can be used elsewhere e.g. plugin_shutdown
-                cls._plugin_data = await cls._plugin.plugin_start(cls._plugin_data)
-            else:
-                cls._plugin.plugin_start(cls._plugin_data)
+            cls._plugin.plugin_start(cls._plugin_data)
 
             await Ingest.start(cls._core_management_host,cls._core_management_port)
         except Exception:
