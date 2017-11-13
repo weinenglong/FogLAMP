@@ -76,8 +76,10 @@ INSERT INTO foglamp.configuration ( key, description, value )
 -- COAP:  CoAP device server
 --        plugin: python module to load dynamically
 -- FOGL-698 - Fix configuration entry for CoAP plugin (init.sql vs via configuration manager)
---INSERT INTO foglamp.configuration ( key, description, value )
---     VALUES ( 'COAP', 'CoAP Plugin Configuration', ' { "plugin" : { "type" : "string", "value" : "coap", "default" : "coap", "description" : "Python module name of the plugin to load" } } ');
+INSERT INTO foglamp.configuration ( key, description, value )
+     VALUES ( 'COAP', 'CoAP Plugin Configuration', ' { "plugin" : { "type" : "string", "value" : "coap", "default" : "coap", "description" : "Python module name of the plugin to load" } } ');
+INSERT INTO foglamp.configuration ( key, description, value )
+     VALUES ( 'HTTP_SOUTH', 'HTTP South Plugin Configuration', ' { "plugin" : { "type" : "string", "value" : "http_south", "default" : "http_south", "description" : "Python module name of the plugin to load" } } ');
 
 -- DELETE data for roles, resources and permissions
 DELETE FROM foglamp.role_resource_permission;
@@ -119,8 +121,8 @@ INSERT INTO foglamp.statistics ( key, description, value, previous_value )
 -- Use this to create guids: https://www.uuidgenerator.net/version1 */
 -- Weekly repeat for timed schedules: set schedule_interval to 168:00:00
 
-insert into foglamp.scheduled_processes (name, script) values ('coap', '["python3", "-m", "foglamp.device"]');
-insert into foglamp.scheduled_processes (name, script) values ('http_south', '["python3", "-m", "foglamp.device"]');
+insert into foglamp.scheduled_processes (name, script) values ('COAP', '["python3", "-m", "foglamp.device"]');
+insert into foglamp.scheduled_processes (name, script) values ('HTTP_SOUTH', '["python3", "-m", "foglamp.device"]');
 insert into foglamp.scheduled_processes (name, script) values ('purge', '["python3", "-m", "foglamp.data_purge"]');
 insert into foglamp.scheduled_processes (name, script) values ('stats collector', '["python3", "-m", "foglamp.statistics_history"]');
 insert into foglamp.scheduled_processes (name, script) values ('sending process', '["python3", "-m", "foglamp.sending_process", "--stream_id", "1", "--debug_level", "1"]');
@@ -131,13 +133,13 @@ insert into foglamp.scheduled_processes (name, script) values ('statistics to pi
 -- Start the device server COAP at start-up
 insert into foglamp.schedules(id, schedule_name, process_name, schedule_type,
 schedule_interval, exclusive)
-values ('ada12840-68d3-11e7-907b-a6006ad3dba0', 'device', 'coap', 1,
+values ('ada12840-68d3-11e7-907b-a6006ad3dba0', 'device', 'COAP', 1,
 '0:0', true);
 
 ---- Start the device server HTTP Listener at start-up
 insert into foglamp.schedules(id, schedule_name, process_name, schedule_type,
 schedule_interval, exclusive)
-values ('a2caca59-1241-478d-925a-79584e7096e0', 'device', 'http_south', 1,
+values ('a2caca59-1241-478d-925a-79584e7096e0', 'device', 'HTTP_SOUTH', 1,
 '0:0', true);
 
 -- Run the purge process every 5 minutes

@@ -37,7 +37,7 @@ class Server:
 
     _plugin_name = None  # type:str
     """"The name of the plugin"""
-    
+
     _plugin = None
     """The plugin's module'"""
 
@@ -84,7 +84,7 @@ class Server:
         loop.stop()
 
     @classmethod
-    async def _start(cls, loop)->None:
+    async def _start(cls, loop) -> None:
         error = None
 
         try:
@@ -99,8 +99,7 @@ class Server:
                 plugin_module_name = config['plugin']['value']
             except KeyError:
                 _LOGGER.exception("Unable to obtain configuration of module for plugin {}".format(cls._plugin_name))
-                # Retrieve the plugin name and hence plugin module name, from the params
-                plugin_module_name = cls._plugin_name
+                raise
 
             try:
                 cls._plugin = __import__("foglamp.device.{}_device".format(plugin_module_name), fromlist=[''])
@@ -111,7 +110,7 @@ class Server:
 
             # Complete the Component definition with config info from the plugin
             await cfg_manager.create_category(cls._plugin_name, default_config,
-                                                        '{} Device'.format(cls._plugin_name, ), True)
+                                                        '{} Device'.format(cls._plugin_name))
 
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
@@ -120,7 +119,7 @@ class Server:
             cls._plugin_data = cls._plugin.plugin_init(config)
             cls._plugin.plugin_start(cls._plugin_data)
 
-            await Ingest.start(cls._core_management_host,cls._core_management_port)
+            await Ingest.start(cls._core_management_host, cls._core_management_port)
         except Exception:
             if error is None:
                 error = 'Failed to initialize plugin {}'.format(cls._plugin_name)
