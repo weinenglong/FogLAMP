@@ -75,6 +75,7 @@ INSERT INTO foglamp.configuration ( key, description, value )
 
 -- COAP:  CoAP device server
 --        plugin: python module to load dynamically
+-- FOGL-698 - Fix configuration entry for CoAP plugin (init.sql vs via configuration manager)
 --INSERT INTO foglamp.configuration ( key, description, value )
 --     VALUES ( 'COAP', 'CoAP Plugin Configuration', ' { "plugin" : { "type" : "string", "value" : "coap", "default" : "coap", "description" : "Python module name of the plugin to load" } } ');
 

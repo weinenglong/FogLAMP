@@ -150,7 +150,7 @@ class HttpSouthIngest():
                 await Ingest.add_readings(asset=asset, timestamp=timestamp, key=key, readings=readings)
 
                 # Success
-                message = readings
+                message = "success"
                 code = web.HTTPOk.status_code
         except (ValueError, TypeError) as e:
             code = web.HTTPBadRequest.status_code

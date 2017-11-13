@@ -97,6 +97,7 @@ class Service(object):
             else:
                 raise Service.AlreadyExistsWithTheSameName
 
+            # TODO: FOGL-692 - Service Registry should support services that do not have a service port
             # if cls.check_address_and_port(address, port):
             #     raise Service.AlreadyExistsWithTheSameAddressAndPort
 

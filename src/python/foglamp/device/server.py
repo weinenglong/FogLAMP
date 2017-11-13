@@ -183,7 +183,7 @@ class Server:
         try:
             cls._microservice_id = response["id"]
             _LOGGER.info('Device - Registered Service %s', response["id"])
-        except (Service.AlreadyExistsWithTheSameAddressAndManagementPort, Service.AlreadyExistsWithTheSameAddressAndPort) as ex:
+        except Service.AlreadyExistsWithTheSameAddressAndManagementPort as ex:
             _LOGGER.error("Device - Service already registered. Plugin {}".format(cls._plugin_name))
         except:
             _LOGGER.error("Device - Could not register. Plugin {}".format(cls._plugin_name))
