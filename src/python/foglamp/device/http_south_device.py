@@ -124,6 +124,7 @@ class HttpSouthIngest():
 
         code = web.HTTPInternalServerError.status_code
         increment_discarded_counter = True
+        # TODO: Decide upon the correct format of message
         message = {'error': 'Exception in Add readings - failed'}
 
         try:
