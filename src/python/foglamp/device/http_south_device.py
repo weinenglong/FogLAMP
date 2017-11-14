@@ -104,6 +104,7 @@ def plugin_shutdown(data):
         raise
 
 
+# TODO: Implement FOGL-701 (implement AuditLogger which logs to DB and can be used by all ) for this class
 class HttpSouthIngest(object):
     """Handles incoming sensor readings from HTTP Listener"""
 

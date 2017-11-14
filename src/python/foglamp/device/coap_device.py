@@ -76,6 +76,7 @@ def plugin_shutdown(data):
     pass
 
 
+# TODO: Implement FOGL-701 (implement AuditLogger which logs to DB and can be used by all ) for this class
 class CoAPIngest(aiocoap.resource.Resource):
     """Handles incoming sensor readings from CoAP"""
 
