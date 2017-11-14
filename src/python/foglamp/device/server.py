@@ -19,6 +19,7 @@ from foglamp.device.ingest import Ingest
 from foglamp.microservice_management import routes
 from foglamp.web import middleware
 
+
 __author__ = "Terris Linenbach"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
 __license__ = "Apache 2.0"
@@ -28,13 +29,14 @@ _LOGGER = logger.setup(__name__, level=20)
 
 
 class Server:
+
     _core_management_host = None
     _core_management_port = None
     """ address of core microservice management api """
 
     _plugin_name = None  # type:str
     """"The name of the plugin"""
-
+    
     _plugin = None
     """The plugin's module'"""
 
@@ -81,7 +83,7 @@ class Server:
         loop.stop()
 
     @classmethod
-    async def _start(cls, loop) -> None:
+    async def _start(cls, loop)->None:
         error = None
 
         try:
@@ -89,7 +91,7 @@ class Server:
             storage = Storage(cls._core_management_host, cls._core_management_port, svc=None)
             cfg_manager = ConfigurationManager(storage)
             await cfg_manager.create_category(cls._plugin_name, config,
-                                              '{} Device'.format(cls._plugin_name), True)
+                                                        '{} Device'.format(cls._plugin_name), True)
 
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
@@ -109,7 +111,7 @@ class Server:
             default_config = cls._plugin.plugin_info()['config']
 
             await cfg_manager.create_category(cls._plugin_name, default_config,
-                                              '{} Device'.format(cls._plugin_name))
+                                                        '{} Device'.format(cls._plugin_name))
 
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
@@ -118,7 +120,7 @@ class Server:
             cls._plugin_data = cls._plugin.plugin_init(config)
             cls._plugin.plugin_start(cls._plugin_data)
 
-            await Ingest.start(cls._core_management_host, cls._core_management_port)
+            await Ingest.start(cls._core_management_host,cls._core_management_port)
         except Exception:
             if error is None:
                 error = 'Failed to initialize plugin {}'.format(cls._plugin_name)
@@ -135,26 +137,26 @@ class Server:
         # create http protocol factory for handling requests
         cls._microservice_management_handler = cls._microservice_management_app.make_handler()
 
+
     @classmethod
     def _run_microservice_management_app(cls, loop):
         # run microservice_management_app
         coro = loop.create_server(cls._microservice_management_handler, '0.0.0.0', 0)
         cls._microservice_management_server = loop.run_until_complete(coro)
-        cls._microservice_management_host, cls._microservice_management_port = \
-        cls._microservice_management_server.sockets[0].getsockname()
-        _LOGGER.info('Device - Management API started on http://%s:%s', cls._microservice_management_host,
-                     cls._microservice_management_port)
+        cls._microservice_management_host, cls._microservice_management_port = cls._microservice_management_server.sockets[0].getsockname()
+        _LOGGER.info('Device - Management API started on http://%s:%s', cls._microservice_management_host, cls._microservice_management_port)
+
 
     @classmethod
     def _get_service_registration_payload(cls):
         service_registration_payload = {
-            "name": cls._plugin_name,
-            "type": "Southbound",
-            "management_port": int(cls._microservice_management_port),
-            "service_port": 0,
-            "address": "127.0.0.1",
-            "protocol": "http"
-        }
+                "name"            : cls._plugin_name,
+                "type"            : "Southbound",
+                "management_port" : int(cls._microservice_management_port),
+                "service_port"    : 0,
+                "address"         : "127.0.0.1",
+                "protocol"        : "http"
+            }
         return service_registration_payload
 
     @classmethod
@@ -177,6 +179,7 @@ class Server:
         except:
             _LOGGER.error("Device - Could not register")
             raise
+
 
     @classmethod
     def start(cls, plugin, core_mgt_host, core_mgt_port):
