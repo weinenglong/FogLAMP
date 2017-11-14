@@ -18,8 +18,6 @@ from foglamp import logger
 from foglamp.device.ingest import Ingest
 from foglamp.microservice_management import routes
 from foglamp.web import middleware
-from foglamp.microservice_management.service_registry.instance import Service
-
 
 __author__ = "Terris Linenbach"
 __copyright__ = "Copyright (c) 2017 OSIsoft, LLC"
@@ -30,7 +28,6 @@ _LOGGER = logger.setup(__name__, level=20)
 
 
 class Server:
-
     _core_management_host = None
     _core_management_port = None
     """ address of core microservice management api """
@@ -74,7 +71,7 @@ class Server:
         try:
             await Ingest.stop()
         except Exception:
-            _LOGGER.exception("Unable to stop the Ingest server. Plugin {}".format(cls._plugin_name))
+            _LOGGER.exception('Unable to stop the Ingest server')
             return
 
         # Stop all pending asyncio tasks
@@ -88,29 +85,31 @@ class Server:
         error = None
 
         try:
-            # Create Category before loading the plugin
             config = {}
             storage = Storage(cls._core_management_host, cls._core_management_port, svc=None)
             cfg_manager = ConfigurationManager(storage)
-            await cfg_manager.create_category(cls._plugin_name, config, '{} Device'.format(cls._plugin_name), True)
+            await cfg_manager.create_category(cls._plugin_name, config,
+                                              '{} Device'.format(cls._plugin_name), True)
+
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
             try:
                 plugin_module_name = config['plugin']['value']
             except KeyError:
-                _LOGGER.exception("Unable to obtain configuration of module for plugin {}".format(cls._plugin_name))
+                _LOGGER.warning("Unable to obtain configuration of module for plugin {}".format(cls._plugin_name))
                 raise
 
             try:
                 cls._plugin = __import__("foglamp.device.{}_device".format(plugin_module_name), fromlist=[''])
             except Exception:
-                error = 'Unable to load module {} for device plugin {}'.format(plugin_module_name, cls._plugin_name)
+                error = 'Unable to load module {} for device plugin {}'.format(plugin_module_name,
+                                                                               cls._plugin_name)
                 raise
+
             default_config = cls._plugin.plugin_info()['config']
 
-            # Complete the Component definition with config info from the plugin
             await cfg_manager.create_category(cls._plugin_name, default_config,
-                                                        '{} Device'.format(cls._plugin_name))
+                                              '{} Device'.format(cls._plugin_name))
 
             config = await cfg_manager.get_category_all_items(cls._plugin_name)
 
@@ -124,6 +123,7 @@ class Server:
             if error is None:
                 error = 'Failed to initialize plugin {}'.format(cls._plugin_name)
             _LOGGER.exception(error)
+            print(error)
             asyncio.ensure_future(cls._stop(loop))
 
     @classmethod
@@ -135,26 +135,26 @@ class Server:
         # create http protocol factory for handling requests
         cls._microservice_management_handler = cls._microservice_management_app.make_handler()
 
-
     @classmethod
     def _run_microservice_management_app(cls, loop):
         # run microservice_management_app
         coro = loop.create_server(cls._microservice_management_handler, '0.0.0.0', 0)
         cls._microservice_management_server = loop.run_until_complete(coro)
-        cls._microservice_management_host, cls._microservice_management_port = cls._microservice_management_server.sockets[0].getsockname()
-        _LOGGER.info("Device Plugin {} - Management API started on http://%s:%s".format(cls._plugin_name), cls._microservice_management_host, cls._microservice_management_port)
-
+        cls._microservice_management_host, cls._microservice_management_port = \
+        cls._microservice_management_server.sockets[0].getsockname()
+        _LOGGER.info('Device - Management API started on http://%s:%s', cls._microservice_management_host,
+                     cls._microservice_management_port)
 
     @classmethod
     def _get_service_registration_payload(cls):
         service_registration_payload = {
-                "name"            : cls._plugin_name,
-                "type"            : "Southbound",
-                "management_port" : int(cls._microservice_management_port),
-                "service_port"    : 0,
-                "address"         : "127.0.0.1",
-                "protocol"        : "http"
-            }
+            "name": cls._plugin_name,
+            "type": "Southbound",
+            "management_port": int(cls._microservice_management_port),
+            "service_port": 0,
+            "address": "127.0.0.1",
+            "protocol": "http"
+        }
         return service_registration_payload
 
     @classmethod
@@ -165,21 +165,18 @@ class Server:
         conn.request(method='POST', url='/foglamp/service', body=json.dumps(service_registration_payload))
         r = conn.getresponse()
         if r.status in range(400, 500):
-            _LOGGER.error("Client error code: %d. Plugin {}".format(cls._plugin_name), r.status)
+            _LOGGER.error("Client error code: %d", r.status)
         if r.status in range(500, 600):
-            _LOGGER.error("Server error code: %d. Plugin {}".format(cls._plugin_name), r.status)
+            _LOGGER.error("Server error code: %d", r.status)
         res = r.read().decode()
         conn.close()
         response = json.loads(res)
         try:
             cls._microservice_id = response["id"]
             _LOGGER.info('Device - Registered Service %s', response["id"])
-        except Service.AlreadyExistsWithTheSameAddressAndManagementPort as ex:
-            _LOGGER.error("Device - Service already registered. Plugin {}".format(cls._plugin_name))
         except:
-            _LOGGER.error("Device - Could not register. Plugin {}".format(cls._plugin_name))
+            _LOGGER.error("Device - Could not register")
             raise
-
 
     @classmethod
     def start(cls, plugin, core_mgt_host, core_mgt_port):
@@ -205,19 +202,19 @@ class Server:
         try:
             cls._make_microservice_management_app()
         except Exception:
-            _LOGGER.exception("Unable to create microservice management app. Plugin {}".format(cls._plugin_name))
+            _LOGGER.exception("Unable to create microservice management app")
             raise
 
         try:
             cls._run_microservice_management_app(loop)
         except Exception:
-            _LOGGER.exception("Unable to run microservice management app. Plugin {}".format(cls._plugin_name))
+            _LOGGER.exception("Unable to run microservice management app")
             raise
 
         try:
             cls._register_microservice()
         except Exception:
-            _LOGGER.exception("Unable to register. Plugin {}".format(cls._plugin_name))
+            _LOGGER.exception("Unable to register")
             raise
 
         asyncio.ensure_future(cls._start(loop))
