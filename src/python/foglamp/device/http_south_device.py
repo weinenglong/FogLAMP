@@ -19,7 +19,7 @@ __version__ = "${VERSION}"
 
 _LOGGER = logger.setup(__name__)
 
-_CONFIG_CATEGORY_NAME = 'http_south'
+_CONFIG_CATEGORY_NAME = 'HTTP_SOUTH'
 _CONFIG_CATEGORY_DESCRIPTION = 'South Plugin HTTP Listener'
 _DEFAULT_CONFIG = {
     'plugin': {
