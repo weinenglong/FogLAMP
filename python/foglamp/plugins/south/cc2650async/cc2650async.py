@@ -158,6 +158,8 @@ def plugin_start(handle):
                 time_stamp = str(datetime.datetime.now(tz=datetime.timezone.utc))
                 try:
                     pattern_index = tag.con.expect('Notification handle = .*? \r', timeout=4)
+                    # Re-initialize attempt_count on success
+                    attempt_count = 1
                 except pexpect.TIMEOUT:
                     attempt_count += 1
                     if attempt_count > 15:
@@ -178,6 +180,9 @@ def plugin_start(handle):
                     else:
                         await asyncio.sleep(1)
                         continue
+
+                # Re-initialize attempt_count on success
+                attempt_count = 1
 
                 after = tag.con.after
                 hex_string = after.split()[3:]

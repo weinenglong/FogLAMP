@@ -90,6 +90,7 @@ def plugin_start(data):
 
         data['app'] = app
         data['handler'] = handler
+        data['server'] = server_coro
     except Exception as e:
         _LOGGER.exception(str(e))
         sys.exit(1)

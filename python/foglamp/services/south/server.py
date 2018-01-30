@@ -8,6 +8,9 @@
 
 import asyncio
 import signal
+
+import pexpect
+
 from foglamp.services.south import exceptions
 from foglamp.common.configuration_manager import ConfigurationManager
 from foglamp.common import logger
@@ -126,7 +129,7 @@ class Server(FoglampMicroservice):
             pass
         except exceptions.DataRetrievalError:
             _LOGGER.exception('Data retreival error in plugin {}'.format(self._name))
-        except (Exception, KeyError) as ex:
+        except (Exception, KeyError, pexpect.exceptions.TIMEOUT) as ex:
             if error is None:
                 error = 'Failed to initialize plugin {}'.format(self._name)
             _LOGGER.exception(error)
@@ -176,17 +179,7 @@ class Server(FoglampMicroservice):
         """Starts the South Microservice
         """
         loop = asyncio.get_event_loop()
-
-        # Register signal handlers
-        # Registering SIGTERM causes an error at shutdown. See
-        # https://github.com/python/asyncio/issues/396
-        # for signal_name in (signal.SIGINT, signal.SIGTERM):
-        #     loop.add_signal_handler(
-        #         signal_name,
-        #         lambda: asyncio.ensure_future(self._stop(loop)))
-
         asyncio.ensure_future(self._start(loop))
-
         # This activates event loop and starts fetching events to the microservice server instance
         loop.run_forever()
 
@@ -271,7 +264,7 @@ class Server(FoglampMicroservice):
                 asyncio.ensure_future(self._exec_plugin_poll())
         except asyncio.CancelledError:
             pass
-        except exceptions.DataRetrievalError:
+        except (exceptions.DataRetrievalError, pexpect.exceptions.TIMEOUT):
             _LOGGER.exception('Data retreival error in plugin {} during reconfigure'.format(self._name))
             raise web.HTTPInternalServerError('Data retreival error in plugin {} during reconfigure'.format(self._name))
 
