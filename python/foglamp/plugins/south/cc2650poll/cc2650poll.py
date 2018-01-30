@@ -51,8 +51,6 @@ _DEFAULT_CONFIG = {
 
 _LOGGER = logger.setup(__name__, level=20)
 
-sensortag_characteristics = characteristics
-
 
 def plugin_info():
     """ Returns information about the plugin.
@@ -81,7 +79,7 @@ def plugin_init(config):
         handle: JSON object to be used in future calls to the plugin
     Raises:
     """
-    global sensortag_characteristics
+    sensortag_characteristics = copy.deepcopy(characteristics)
     data = copy.deepcopy(config)
 
     bluetooth_adr = config['bluetoothAddress']['value']
