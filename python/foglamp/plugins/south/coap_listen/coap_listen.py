@@ -8,7 +8,7 @@
 
 import asyncio
 import json
-
+import copy
 import aiocoap.resource
 import cbor2
 import logging
@@ -115,8 +115,30 @@ def plugin_reconfigure(handle, new_config):
         new_handle: new handle to be used in the future calls
     Raises:
     """
-    _LOGGER.info("Old config for Coap plugin {} \n new config {}".format(handle, new_config))
-    new_handle = plugin_init(new_config)
+    _LOGGER.info("Old config for COAP plugin {} \n new config {}".format(handle, new_config))
+
+    diff = {}
+    for key in new_config:
+        if key in handle:
+            if handle[key] != new_config[key]:
+                diff.update({key: new_config['key']})
+        else:
+            diff.update({key: new_config['key']})
+
+    _LOGGER.info("Change in config for COAP plugin {}".format(diff))
+
+    if 'port' in diff or 'uri' in diff:
+        try:
+            asyncio.ensure_future(aiocoap_ctx.shutdown())
+        except Exception as ex:
+            _LOGGER.exception('Error in shutting down COAP plugin {}'.format(str(ex)))
+            raise
+        new_handle = plugin_init(new_config)
+        new_handle['restart'] = 'yes'
+    else:
+        new_handle = copy.deepcopy(handle)
+        new_handle['restart'] = 'no'
+
     return new_handle
 
 def plugin_shutdown(handle):

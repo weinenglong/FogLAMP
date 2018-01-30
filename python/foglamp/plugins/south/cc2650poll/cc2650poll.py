@@ -257,10 +257,30 @@ def plugin_reconfigure(handle, new_config):
         new_handle: new handle to be used in the future calls
     Raises:
     """
-
     _LOGGER.info("Old config for CC2650POLL plugin {} \n new config {}".format(handle, new_config))
 
-    new_handle = plugin_init(new_config)
+    diff = {}
+    for key in new_config:
+        if key in handle:
+            if handle[key] != new_config[key]:
+                diff.update({key: new_config['key']})
+        else:
+            diff.update({key: new_config['key']})
+
+    _LOGGER.info("Change in config for CC2650POLL plugin {}".format(diff))
+
+    if 'bluetoothAddress' in diff:
+        if 'tag' in handle:
+            bluetooth_adr = handle['bluetoothAddress']['value']
+            tag = handle['tag']
+            tag.disconnect()
+            _LOGGER.info('SensorTagCC2650 {} Disconnected.'.format(bluetooth_adr))
+        new_handle = plugin_init(new_config)
+        new_handle['restart'] = 'yes'
+    else:
+        new_handle = copy.deepcopy(handle)
+        new_handle['restart'] = 'no'
+
     return new_handle
 
 def plugin_shutdown(handle):

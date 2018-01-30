@@ -64,6 +64,8 @@ class Server(FoglampMicroservice):
     """The value that is returned by the plugin_init"""
 
     _type = "Southbound"
+    _task_async = None
+    _task_poll = None
 
     async def _start(self, loop) -> None:
         error = None
@@ -120,11 +122,13 @@ class Server(FoglampMicroservice):
 
             self._plugin_handle = self._plugin.plugin_init(config)
 
+            await Ingest.start(self._core_management_host, self._core_management_port)
+
             # Executes the requested plugin type
             if self._plugin_info['mode'] == 'async':
-                asyncio.ensure_future(self._exec_plugin_async())
+                self._task_async = asyncio.ensure_future(self._exec_plugin_async())
             elif self._plugin_info['mode'] == 'poll':
-                asyncio.ensure_future(self._exec_plugin_poll())
+                self._task_poll = asyncio.ensure_future(self._exec_plugin_poll())
         except asyncio.CancelledError:
             pass
         except exceptions.DataRetrievalError:
@@ -139,13 +143,13 @@ class Server(FoglampMicroservice):
     async def _exec_plugin_async(self) -> None:
         """Executes async type plugin
         """
-        await Ingest.start(self._core_management_host, self._core_management_port)
+        # await Ingest.start(self._core_management_host, self._core_management_port)
         self._plugin.plugin_start(self._plugin_handle)
 
     async def _exec_plugin_poll(self) -> None:
         """Executes poll type plugin
         """
-        await Ingest.start(self._core_management_host, self._core_management_port)
+        # await Ingest.start(self._core_management_host, self._core_management_port)
         max_retry = 3
         try_count = 1
         while self._plugin and try_count <= max_retry:
@@ -231,24 +235,6 @@ class Server(FoglampMicroservice):
         _LOGGER.info('Configuration has changed for South plugin {}'.format(self._name))
 
         try:
-            # Shutdown plugin and Ingest before re-configure
-            try:
-                self._plugin.plugin_shutdown(self._plugin_handle)
-            except Exception:
-                _LOGGER.exception("Unable to stop plugin '{}' during reconfigure".format(self._name))
-                raise web.HTTPInternalServerError(reason="reconfigure error - unable to stop plugin {}".format(self._name))
-            try:
-                await Ingest.stop()
-                _LOGGER.info('Stopped the Ingest server.')
-            except Exception as ex:
-                _LOGGER.exception('Unable to stop the Ingest server. %s', str(ex))
-                raise web.HTTPInternalServerError(reason="reconfigure error - unable to stop ingest for plugin {}".format(self._name))
-
-            # Cancel all pending asyncio tasks after a timeout occurs
-            done, pending = await asyncio.wait(asyncio.Task.all_tasks(), timeout=5)
-            for task_pending in pending:
-                task_pending.cancel()
-
             # retrieve new configuration
             cfg_manager = ConfigurationManager(self._storage)
             new_config = await cfg_manager.get_category_all_items(self._name)
@@ -257,11 +243,14 @@ class Server(FoglampMicroservice):
             new_handle = self._plugin.plugin_reconfigure(self._plugin_handle, new_config)
             self._plugin_handle = new_handle
 
-            # Executes the requested plugin type with new config
-            if self._plugin_info['mode'] == 'async':
-                asyncio.ensure_future(self._exec_plugin_async())
-            elif self._plugin_info['mode'] == 'poll':
-                asyncio.ensure_future(self._exec_plugin_poll())
+            if new_handle['restart'] == 'yes':
+                # Executes the requested plugin type with new config
+                if self._plugin_info['mode'] == 'async':
+                    self._task_async.cancel()
+                    self._task_async = asyncio.ensure_future(self._exec_plugin_async())
+                elif self._plugin_info['mode'] == 'poll':
+                    self._task_poll.cancel()
+                    self._task_poll = asyncio.ensure_future(self._exec_plugin_poll())
         except asyncio.CancelledError:
             pass
         except (exceptions.DataRetrievalError, pexpect.exceptions.TIMEOUT):

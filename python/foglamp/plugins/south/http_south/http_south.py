@@ -8,6 +8,7 @@
 import sys
 from aiohttp import web
 import asyncio
+import copy
 from foglamp.common import logger
 from foglamp.common.web import middleware
 from foglamp.services.south.ingest import Ingest
@@ -108,10 +109,38 @@ def plugin_reconfigure(handle, new_config):
         new_handle: new handle to be used in the future calls
     Raises:
     """
-
     _LOGGER.info("Old config for HTTP_SOUTH plugin {} \n new config {}".format(handle, new_config))
 
-    new_handle = plugin_init(new_config)
+    diff = {}
+    for key in new_config:
+        if key in handle:
+            if handle[key] != new_config[key]:
+                diff.update({key: new_config['key']})
+        else:
+            diff.update({key: new_config['key']})
+
+    _LOGGER.info("Change in config for HTTP_SOUTH plugin {}".format(diff))
+
+    if 'port' in diff or 'uri' in diff or 'host' in diff:
+        try:
+            app = handle['app']
+            handler = handle['handler']
+            server = handle['server']
+
+            server.close()
+            asyncio.ensure_future(server.wait_closed())
+            asyncio.ensure_future(app.shutdown())
+            asyncio.ensure_future(handler.shutdown(60.0))
+            asyncio.ensure_future(app.cleanup())
+        except Exception as e:
+            _LOGGER.exception(str(e))
+            raise
+        new_handle = plugin_init(new_config)
+        new_handle['restart'] = 'yes'
+    else:
+        new_handle = copy.deepcopy(handle)
+        new_handle['restart'] = 'no'
+
     return new_handle
 
 def plugin_shutdown(data):
@@ -125,10 +154,10 @@ def plugin_shutdown(data):
         asyncio.ensure_future(app.shutdown())
         asyncio.ensure_future(handler.shutdown(60.0))
         asyncio.ensure_future(app.cleanup())
-        _LOGGER.info('South HTTP plugin shut down.')
     except Exception as e:
         _LOGGER.exception(str(e))
         raise
+    _LOGGER.info('South HTTP plugin shut down.')
 
 
 # TODO: Implement FOGL-701 (implement AuditLogger which logs to DB and can be used by all ) for this class
