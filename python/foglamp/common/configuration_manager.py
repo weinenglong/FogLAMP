@@ -25,6 +25,7 @@ _logger = logger.setup(__name__)
 # MAKE UPPER_CASE
 _valid_type_strings = ['boolean', 'integer', 'string', 'IPv4', 'IPv6', 'X509 certificate', 'password', 'JSON']
 
+# unit: test singleton aspect of code
 class ConfigurationManagerSingleton(object):
     """ ConfigurationManagerSingleton
     
@@ -59,18 +60,23 @@ class ConfigurationManager(ConfigurationManagerSingleton):
                 value_name - string (fixed - 'value')
                     value_val - string (dynamic)
     """
-
     _storage = None
-    _registered_interests = {}
+    _registered_interests = None
+    # unit, test constructor with and without parameter X with and without storage
     def __init__(self, storage=None):
         ConfigurationManagerSingleton.__init__(self)
         if self._storage is None:
             if not isinstance(storage, StorageClient):
                 raise TypeError('Must be a valid Storage object')
             self._storage = storage
+        if self._registered_interests is None:
+            self._registered_interests = {}
+           
 
+    # unit with and without category name
     async def _run_callbacks(self, category_name):
         callbacks = self._registered_interests.get(category_name)
+      
         if callbacks is not None:
             for callback in callbacks:
                 try:
