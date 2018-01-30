@@ -1,9 +1,3 @@
-"""
-The following tests the configuration manager component For the most part,
-the code uses the boolean type for testing due to simplicity; but contains
-tests to verify which data_types are supported and which are not.
-"""
-
 import asyncio
 import pytest
 from foglamp.common.configuration_manager import ConfigurationManager
