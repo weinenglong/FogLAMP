@@ -155,6 +155,7 @@ class SensorTagCC2650(object):
                 msg_success = 'SensorTagCC2650 {} connected successfully'.format(self.bluetooth_adr)
                 print(msg_success)
                 _LOGGER.debug(msg_success)
+                break
             except (ExceptionPexpect, EOF, TIMEOUT, Exception) as ex:
                 attempt_count += 1
                 time.sleep(0.33)
