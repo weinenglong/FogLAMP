@@ -7,6 +7,8 @@
 """FogLAMP South Microservice"""
 
 import asyncio
+import copy
+
 from foglamp.services.south import exceptions
 from foglamp.common.configuration_manager import ConfigurationManager
 from foglamp.common import logger
@@ -63,6 +65,8 @@ class Server(FoglampMicroservice):
 
     _task_main = None
 
+    _restart_config = None
+
     async def _start(self, loop) -> None:
         error = None
         try:
@@ -116,6 +120,7 @@ class Server(FoglampMicroservice):
                 _LOGGER.error(message)
                 raise exceptions.InvalidPluginTypeError()
 
+            self._restart_config = copy.deepcopy(config)
             self._plugin_handle = self._plugin.plugin_init(config)
 
             await Ingest.start(self._core_management_host, self._core_management_port)
@@ -172,6 +177,7 @@ class Server(FoglampMicroservice):
                 try_count += 1
                 _LOGGER.exception('Failed to poll for plugin {}, retry count: {}'.format(self._name, try_count))
                 await asyncio.sleep(2)
+                await self._restart_plugin()
 
     def run(self):
         """Starts the South Microservice
@@ -180,6 +186,16 @@ class Server(FoglampMicroservice):
         asyncio.ensure_future(self._start(loop))
         # This activates event loop and starts fetching events to the microservice server instance
         loop.run_forever()
+
+    async def _restart_plugin(self):
+        try:
+            self._plugin._plugin_stop(self._plugin_handle)
+        except Exception:
+            _LOGGER.exception("Unable to stop plugin '{}'".format(self._name))
+        finally:
+            self._plugin_handle = None
+
+        self._plugin_handle = self._plugin.plugin_init(self._restart_config)
 
     async def _stop(self, loop):
         if self._plugin is not None:
