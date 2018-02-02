@@ -136,24 +136,30 @@ class SensorTagCC2650(object):
     is_connected = False
 
     def __init__(self, bluetooth_adr, timeout):
-        try:
-            self.bluetooth_adr = bluetooth_adr
+        attempt_count = 1
+        while attempt_count <= 5:
+            try:
+                self.bluetooth_adr = bluetooth_adr
 
-            self.con = pexpect.spawn('gatttool -b ' + bluetooth_adr + ' --interactive')
-            self.con.expect('\[LE\]>', timeout=int(timeout))
+                self.con = pexpect.spawn('gatttool -b ' + bluetooth_adr + ' --interactive')
+                self.con.expect('\[LE\]>', timeout=int(timeout))
 
-            msg_debug = 'SensorTagCC2650 {} Connecting... If nothing happens, please press the power button.'.\
-                        format(self.bluetooth_adr)
-            print(msg_debug)
-            _LOGGER.debug(msg_debug)
+                msg_debug = 'SensorTagCC2650 {} Connecting... If nothing happens, please press the power button.'.\
+                            format(self.bluetooth_adr)
+                print(msg_debug)
+                _LOGGER.debug(msg_debug)
 
-            self.con.sendline('connect')
-            self.con.expect('.*Connection successful.*\[LE\]>', timeout=int(timeout))
-            self.is_connected = True
-            msg_success = 'SensorTagCC2650 {} connected successfully'.format(self.bluetooth_adr)
-            print(msg_success)
-            _LOGGER.debug(msg_success)
-        except (ExceptionPexpect, EOF, TIMEOUT, Exception) as ex:
+                self.con.sendline('connect')
+                self.con.expect('.*Connection successful.*\[LE\]>', timeout=int(timeout))
+                self.is_connected = True
+                msg_success = 'SensorTagCC2650 {} connected successfully'.format(self.bluetooth_adr)
+                print(msg_success)
+                _LOGGER.debug(msg_success)
+            except (ExceptionPexpect, EOF, TIMEOUT, Exception) as ex:
+                attempt_count += 1
+                time.sleep(0.33)
+
+        if attempt_count > 5:
             self.is_connected = False
             self.con.sendline('quit')
             # TODO: Investigate why SensorTag goes to sleep often and find a suitable software solution to awake it.
