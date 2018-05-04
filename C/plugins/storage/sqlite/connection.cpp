@@ -43,7 +43,7 @@ using namespace rapidjson;
 #define F_DATEH24_H     "%Y-%m-%d %H"
 // This is the default datetime format in FogLAMP: 2018-05-03 18:15:00.622
 #define F_DATEH24_MS    "%Y-%m-%d %H:%M:%f"
-#define SQLITE3_NOW     "strftime('%Y-%m-%d %H:%M:%f', 'now')"
+#define SQLITE3_NOW     "strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')"
 #define SQLITE3_FOGLAMP_DATETIME_TYPE "DATETIME"
 static time_t connectErrorTime = 0;
 map<string, string> sqliteDateFormat = {
@@ -136,7 +136,7 @@ bool Connection::applyColumnDateTimeFormat(sqlite3_stmt *pStmt,
 			string formatStmt = string("SELECT strftime('");
 			formatStmt += string(F_DATEH24_MS);
 			formatStmt += "', '" + string((char *)sqlite3_column_text(pStmt, i));
-			formatStmt += "', 'localtime')";
+			formatStmt += "')";
 
 			char* zErrMsg = NULL;
 			// New formatted data
@@ -222,14 +222,14 @@ bool retCode;
 		{
 			outFormat.append("cast(round((julianday(");
 			outFormat.append(colName);
-			outFormat.append(") - 2440587.5)*86400 -0.00005, 3) AS FLOAT), 'unixepoch', 'localtime'");
+			outFormat.append(") - 2440587.5)*86400 -0.00005, 3) AS FLOAT), 'unixepoch'");
 		}
 		else
 		{
 			outFormat.append(colName);
 		}
 
-		outFormat.append(", 'localtime')");
+		outFormat.append(")");
 		retCode = true;
 	}
 	else
@@ -1440,7 +1440,8 @@ char *zErrMsg = NULL;
 int rc;
 int retrieve;
 
-	/* This query assumes datetime values are in UTC
+	/*
+	 * This query assumes datetime values are in 'localtime'
 	 */
 	snprintf(sqlbuffer,
 		 sizeof(sqlbuffer),
@@ -1448,8 +1449,8 @@ int retrieve;
 			"asset_code, " \
 			"read_key, " \
 			"reading, " \
-			"strftime('%%Y-%%m-%%d %%H:%%M:%%f', user_ts) AS \"user_ts\", " \
-			"strftime('%%Y-%%m-%%d %%H:%%M:%%f', ts) AS \"ts\" " \
+			"strftime('%%Y-%%m-%%d %%H:%%M:%%f', user_ts, 'utc') AS \"user_ts\", " \
+			"strftime('%%Y-%%m-%%d %%H:%%M:%%f', ts, 'utc') AS \"ts\" " \
 		 "FROM foglamp.readings " \
 			"WHERE id >= %lu " \
 		 "ORDER BY id ASC " \
@@ -1514,7 +1515,7 @@ long numReadings = 0;
 		 * So set age based on the data we have and continue.
 		 */
 		SQLBuffer oldest;
-		oldest.append("SELECT (strftime('%s','now') - strftime('%s', MIN(user_ts), 'localtime'))/360 FROM foglamp.readings;");
+		oldest.append("SELECT (strftime('%s','now', 'localtime') - strftime('%s', MIN(user_ts)))/360 FROM foglamp.readings;");
 		const char *query = oldest.coalesce();
 		char *zErrMsg = NULL;
 		int rc;
@@ -1985,7 +1986,7 @@ bool Connection::jsonAggregates(const Value& payload,
 					sql.append(" * round(");
 					sql.append("strftime('%J', ");
 					sql.append(tb["timestamp"].GetString());
-					sql.append(", 'localtime') / ");
+					sql.append(") / ");
 					sql.append(tb["size"].GetString());
 					sql.append(", 6)");
 				}
@@ -2022,7 +2023,7 @@ bool Connection::jsonAggregates(const Value& payload,
 				{
 					sql.append(")");
 				}
-				sql.append(", 'localtime')");
+				sql.append(")");
 			}
 		}
 		else
@@ -2036,8 +2037,7 @@ bool Connection::jsonAggregates(const Value& payload,
 
 			/*
 			 * Default format when no format is specified:
-			 * - we use JulianDay in order to get milliseconds,
-			 * - with 'localtime'
+			 * - we use JulianDay in order to get milliseconds.
 			 */
 			sql.append("strftime('%J', ");
 			sql.append(tb["timestamp"].GetString());
@@ -2052,7 +2052,7 @@ bool Connection::jsonAggregates(const Value& payload,
 				sql.append(")");
 			}
 
-			sql.append(", 'localtime')");
+			sql.append(")");
 		}
 
 		sql.append(" AS \"");
@@ -2191,16 +2191,14 @@ bool Connection::jsonModifiers(const Value& payload, SQLBuffer& sql)
 		// Use DateTime Y-m-d H:M:S from JulianDay
                 sql.append("datetime(strftime('%J', ");
                 sql.append(tb["timestamp"].GetString());
-		// Append 'localtime'
-                sql.append("), 'localtime')");
+                sql.append("))");
 
 		sql.append(" ORDER BY ");
 
 		// Use DateTime Y-m-d H:M:S fromt JulianDay
                 sql.append("datetime(strftime('%J', ");
                 sql.append(tb["timestamp"].GetString());
-		// Append localtime
-                sql.append("), 'localtime')");
+                sql.append("))");
 
 		sql.append(" DESC");
 	}
