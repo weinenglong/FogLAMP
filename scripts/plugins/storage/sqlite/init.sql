@@ -946,22 +946,22 @@ INSERT INTO foglamp.schedules ( id, schedule_name, process_name, schedule_type,
 --
 
 -- Readings to OMF to PI
-INSERT INTO foglamp.destinations ( id, description, ts )
-       VALUES ( 1, 'OMF', datetime('now') );
-INSERT INTO foglamp.streams ( id, destination_id, description, last_object,ts )
-       VALUES ( 1, 1, 'OMF north', 0, datetime('now') );
+INSERT INTO foglamp.destinations ( id, description )
+       VALUES ( 1, 'OMF' );
+INSERT INTO foglamp.streams ( id, destination_id, description, last_object )
+       VALUES ( 1, 1, 'OMF north', 0 );
 
 -- Stats to OMF to PI
-INSERT INTO foglamp.streams ( id, destination_id, description, last_object,ts )
-       VALUES ( 2, 1, 'FogLAMP statistics into PI', 0, datetime('now') );
+INSERT INTO foglamp.streams ( id, destination_id, description, last_object )
+       VALUES ( 2, 1, 'FogLAMP statistics into PI', 0 );
 
 -- Readings to HTTP
-INSERT INTO foglamp.destinations ( id, description, ts )
-       VALUES ( 2, 'HTTP_TR', datetime('now') );
-INSERT INTO foglamp.streams ( id, destination_id, description, last_object, ts )
-       VALUES ( 3, 2, 'HTTP north', 0, datetime('now') );
+INSERT INTO foglamp.destinations ( id, description )
+       VALUES ( 2, 'HTTP_TR' );
+INSERT INTO foglamp.streams ( id, destination_id, description, last_object )
+       VALUES ( 3, 2, 'HTTP north', 0 );
 
 -- Readings to OMF to OCS
-INSERT INTO foglamp.destinations( id, description, ts ) VALUES ( 3, 'OCS', datetime('now') );
-INSERT INTO foglamp.streams( id, destination_id, description, last_object, ts ) VALUES ( 4, 3, 'OCS north', 0, datetime('now') );
+INSERT INTO foglamp.destinations( id, description ) VALUES ( 3, 'OCS' );
+INSERT INTO foglamp.streams( id, destination_id, description, last_object ) VALUES ( 4, 3, 'OCS north', 0 );
 
