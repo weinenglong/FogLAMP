@@ -682,7 +682,9 @@ SQLBuffer	jsonConstraints;
 								}
 								else
 								{
+									sql.append("strftime('%Y-%m-%d %H:%M:%f', ");
 									sql.append((*itr)["column"].GetString());
+									sql.append(", 'utc')");
 									sql.append(" AS ");
 									sql.append((*itr)["column"].GetString());
 								}
