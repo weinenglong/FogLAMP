@@ -7,6 +7,7 @@
 """ HTTP North """
 
 import aiohttp
+from aiohttp import web
 import asyncio
 import json
 
@@ -88,12 +89,32 @@ def plugin_reconfigure():
     pass
 
 
+MAX_ATTEMPTS = 5
+class FailedRequest(Exception):
+    """
+    A wrapper of all possible exception during a HTTP request
+    """
+    code = 0
+    message = ''
+    url = ''
+    raised = ''
+
+    def __init__(self, *, raised='', message='', code='', url=''):
+        self.raised = raised
+        self.message = message
+        self.code = code
+        self.url = url
+
+        super().__init__("code:{c} url={u} message={m} raised={r}".format(
+            c=self.code, u=self.url, m=self.message, r=self.raised))
+
 class HttpNorthPlugin(object):
     """ North HTTP Plugin """
 
     def __init__(self):
         self.event_loop = asyncio.get_event_loop()
         self.tasks = []
+        self._session = aiohttp.ClientSession()
 
     def shutdown(self):
         """  Filter and cancel all pending tasks,
@@ -129,7 +150,8 @@ class HttpNorthPlugin(object):
         num_sent = 0
         try:
             new_last_object_id, num_sent = self.event_loop.run_until_complete(self._send_payloads(payloads))
-            is_data_sent = True
+            if num_sent:
+                is_data_sent = True
         except Exception as ex:
             _LOGGER.exception("Data could not be sent, %s", str(ex))
 
@@ -139,33 +161,68 @@ class HttpNorthPlugin(object):
         """ send a list of block payloads """
         num_count = 0
         last_id = None
-        async with aiohttp.ClientSession() as session:
-            payload_to_be_send = list()
-            for payload in payloads:
-                num_count += 1
-                last_id = payload['id']
+
+        for payload in payloads:
+            try:
                 p = {"asset_code": payload['asset_code'],
                      "readings": [{
                          "read_key": payload['read_key'],
                          "user_ts": payload['user_ts'],
                          "reading": payload['reading']
                      }]}
-                payload_to_be_send.append(p)
-            task = asyncio.ensure_future(self._send(payload_to_be_send, session))
-            self.tasks.append(task)  # create list of tasks
-            await asyncio.gather(*self.tasks)  # gather task responses
+                await self._send(p)
+                num_count += 1
+                last_id = payload['id']
+            except FailedRequest as ex:
+                _LOGGER.exception("Data for id %s could not be sent", payload['id'])
+
         return last_id, num_count
 
-    async def _send(self, payload, session):
+    async def _send(self, payload):
         """ Send the payload, using ClientSession """
         url = config['url']['value']
         headers = {'content-type': 'application/json'}
-        async with session.post(url, data=json.dumps(payload), headers=headers) as resp:
-            result = await resp.text()
-            status_code = resp.status
-            if status_code in range(400, 500):
-                _LOGGER.error("Bad request error code: %d, reason: %s", status_code, resp.reason)
-            if status_code in range(500, 600):
-                _LOGGER.error("Server error code: %d, reason: %s", status_code, resp.reason)
+        raised_exc = None
+        attempt_count = 0
+        backoff_interval = 0.5
 
+        if MAX_ATTEMPTS == -1:  # -1 means retry indefinitely
+            attempt_count = -1
+        elif MAX_ATTEMPTS == 0:  # Zero means don't retry
+            attempt_count = 1
+        else:  # any other value means retry N times
+            attempt_count = MAX_ATTEMPTS + 1
+
+        while attempt_count != 0:
+            try:
+                if raised_exc:
+                    _LOGGER.error('caught "%s" url:%s, remaining tries %s, sleeping %.2fsecs',
+                                  raised_exc, url, attempt_count, backoff_interval)
+                    await asyncio.sleep(backoff_interval)
+
+                async with self._session.post(url, data=json.dumps(payload), headers=headers) as resp:
+                    result = await resp.text()
+                    status_code = resp.status
+                    if status_code in range(400, 500):
+                        raise web.HTTPClientError("Bad request error code: %d, reason: %s", status_code, resp.reason)
+                    if status_code in range(500, 600):
+                        raise web.HTTPServerError("Server error code: %d, reason: %s", status_code, resp.reason)
+            except (aiohttp.ClientError,
+                    asyncio.TimeoutError,
+                    web.HTTPClientError,
+                    web.HTTPServerError) as exc:
+                try:
+                    code = exc.code
+                except AttributeError:
+                    code = ''
+                raised_exc = FailedRequest(code=code, message=exc, url=url, raised=exc.__class__.__name__)
+            else:
+                raised_exc = None
+                break
+
+            attempt_count -= 1
+
+        if raised_exc:
+            raise raised_exc
+        else:
             return result
