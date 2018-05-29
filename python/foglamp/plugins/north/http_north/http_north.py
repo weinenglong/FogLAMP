@@ -8,7 +8,6 @@
 
 import aiohttp
 from aiohttp import web
-import asyncio
 import json
 
 from foglamp.common import logger
@@ -24,6 +23,7 @@ _LOGGER = logger.setup(__name__)
 
 http_north = None
 config = ""
+MAX_ATTEMPTS = 5
 
 # Configuration related to HTTP North
 _CONFIG_CATEGORY_NAME = "HTTP_TR"
@@ -81,7 +81,7 @@ def plugin_send(data, payload, stream_id):
 
 
 def plugin_shutdown(data):
-    http_north.shutdown()
+    pass
 
 
 # TODO: (ASK) North plugin can not be reconfigured? (per callback mechanism)
@@ -89,24 +89,21 @@ def plugin_reconfigure():
     pass
 
 
-MAX_ATTEMPTS = 5
 class FailedRequest(Exception):
     """
     A wrapper of all possible exception during a HTTP request
     """
-    code = 0
     message = ''
     url = ''
     raised = ''
 
-    def __init__(self, *, raised='', message='', code='', url=''):
+    def __init__(self, *, raised='', message='', url=''):
         self.raised = raised
         self.message = message
-        self.code = code
         self.url = url
 
-        super().__init__("code:{c} url={u} message={m} raised={r}".format(
-            c=self.code, u=self.url, m=self.message, r=self.raised))
+        super().__init__("url={u} message={m} raised={r}".format(u=self.url, m=self.message, r=self.raised))
+
 
 class HttpNorthPlugin(object):
     """ North HTTP Plugin """
@@ -114,35 +111,6 @@ class HttpNorthPlugin(object):
     def __init__(self):
         self.event_loop = asyncio.get_event_loop()
         self.tasks = []
-        self._session = aiohttp.ClientSession()
-
-    def shutdown(self):
-        """  Filter and cancel all pending tasks,
-
-        After waiting for a threshold limit i.e. config["wait_to_shutdown"]
-
-        done = sent successfully + got an error + trapped into exception
-        pending =  the requests (tasks) waiting for response Or in queue
-
-        """
-        self.event_loop.run_until_complete(self.cancel_tasks())
-
-    async def cancel_tasks(self):
-        # cancel pending tasks
-
-        if len(self.tasks) == 0:
-            return
-
-        done, pending = await asyncio.wait(self.tasks)
-
-        if len(pending):
-            # FIXME: (ASK) wait for some fixed time? or Configurable
-            wait_for = config['shutdown_wait_time']['value']
-            pass
-
-        # cancel any pending tasks, the tuple could be empty so it's safe
-        for pending_task in pending:
-            pending_task.cancel()
 
     def send_payloads(self, payloads, stream_id):
         is_data_sent = False
@@ -175,6 +143,8 @@ class HttpNorthPlugin(object):
                 last_id = payload['id']
             except FailedRequest as ex:
                 _LOGGER.exception("Data for id %s could not be sent", payload['id'])
+            except Exception as ex:
+                _LOGGER.exception("Exception %s occurred while sending data for id %s could not be sent", str(ex), payload['id'])
 
         return last_id, num_count
 
@@ -198,24 +168,19 @@ class HttpNorthPlugin(object):
                 if raised_exc:
                     _LOGGER.error('caught "%s" url:%s, remaining tries %s, sleeping %.2fsecs',
                                   raised_exc, url, attempt_count, backoff_interval)
-                    await asyncio.sleep(backoff_interval)
+                    import time
+                    time.sleep(backoff_interval)
 
-                async with self._session.post(url, data=json.dumps(payload), headers=headers) as resp:
-                    result = await resp.text()
-                    status_code = resp.status
-                    if status_code in range(400, 500):
-                        raise web.HTTPClientError("Bad request error code: %d, reason: %s", status_code, resp.reason)
-                    if status_code in range(500, 600):
-                        raise web.HTTPServerError("Server error code: %d, reason: %s", status_code, resp.reason)
-            except (aiohttp.ClientError,
-                    asyncio.TimeoutError,
-                    web.HTTPClientError,
-                    web.HTTPServerError) as exc:
-                try:
-                    code = exc.code
-                except AttributeError:
-                    code = ''
-                raised_exc = FailedRequest(code=code, message=exc, url=url, raised=exc.__class__.__name__)
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, data=json.dumps(payload), headers=headers) as resp:
+                        result = await resp.text()
+                        status_code = resp.status
+                        if status_code in range(400, 500):
+                            raise web.HTTPClientError("Bad request error code: %d, reason: %s", status_code, resp.reason)
+                        if status_code in range(500, 600):
+                            raise web.HTTPServerError("Server error code: %d, reason: %s", status_code, resp.reason)
+            except (aiohttp.ClientError, web.HTTPClientError, web.HTTPServerError) as exc:
+                raised_exc = FailedRequest(message=exc, url=url, raised=exc.__class__.__name__)
             else:
                 raised_exc = None
                 break
