@@ -23,7 +23,6 @@ _LOGGER = logger.setup(__name__)
 
 http_north = None
 config = ""
-MAX_ATTEMPTS = 5
 
 # Configuration related to HTTP North
 _CONFIG_CATEGORY_NAME = "HTTP_TR"
@@ -54,7 +53,13 @@ _DEFAULT_CONFIG = {
         "description": "JQ formatted filter to apply (applicable if applyFilter is True)",
         "type": "string",
         "default": ".[]"
+    },
+    "max_attempts": {
+        "description": "Maximum no. of retries when a packet fails to trasmit",
+        "type": "integer",
+        "default": "5"
     }
+
 }
 
 
@@ -151,25 +156,25 @@ class HttpNorthPlugin(object):
     async def _send(self, payload):
         """ Send the payload, using ClientSession """
         url = config['url']['value']
+        max_attempts = config['max_attempts']['value']
         headers = {'content-type': 'application/json'}
         raised_exc = None
         attempt_count = 0
         backoff_interval = 0.5
 
-        if MAX_ATTEMPTS == -1:  # -1 means retry indefinitely
+        if max_attempts == -1:  # -1 means retry indefinitely
             attempt_count = -1
-        elif MAX_ATTEMPTS == 0:  # Zero means don't retry
+        elif max_attempts == 0:  # Zero means don't retry
             attempt_count = 1
         else:  # any other value means retry N times
-            attempt_count = MAX_ATTEMPTS + 1
+            attempt_count = max_attempts + 1
 
         while attempt_count != 0:
             try:
                 if raised_exc:
                     _LOGGER.error('caught "%s" url:%s, remaining tries %s, sleeping %.2fsecs',
                                   raised_exc, url, attempt_count, backoff_interval)
-                    import time
-                    time.sleep(backoff_interval)
+                    await asyncio.sleep(backoff_interval)
 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(url, data=json.dumps(payload), headers=headers) as resp:
