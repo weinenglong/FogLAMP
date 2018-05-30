@@ -63,26 +63,61 @@ async def test_send_payload(event_loop):
     http_north.http_north = HttpNorthPlugin()
     http_north.config = http_north._DEFAULT_CONFIG
     http_north.config['url']['value'] = _URL
+    http_north.config['max_attempts']['value'] = 5
     http_north.http_north.event_loop = event_loop
     last_id, num_count = await http_north.http_north._send_payloads(payloads)
     assert (46, 2) == (last_id, num_count)
 
+    http_north.http_north.shutdown()
     await fake_server.stop()
 
 
 @pytest.allure.feature("unit")
 @pytest.allure.story("plugin", "north", "http")
-@pytest.mark.skip(reason='FOGL-1144')
-async def test_send_bad_payload():
-    pass
+@pytest.mark.asyncio
+async def test_send_bad_payload(event_loop, mocker):
+    fake_server = FakeServer(loop=event_loop)
+    await fake_server.start()
+
+    payloads = [{'id': 1, 'asset_code': 'fogbench/temperature', 'read_key': '31e5ccbb-3e45-4038-95e9-7920834d0852', 'user_ts': '2018-02-26 12:12:54.171949+00'}]
+    http_north.http_north = HttpNorthPlugin()
+    http_north.config = http_north._DEFAULT_CONFIG
+
+    log_exception = mocker.patch.object(http_north._LOGGER, "exception")
+
+    http_north.config['url']['value'] = _URL
+    http_north.config['max_attempts']['value'] = 5
+    http_north.http_north.event_loop = event_loop
+    last_id, num_count = await http_north.http_north._send_payloads(payloads)
+
+    assert 1 == log_exception.call_count
+    log_args = 'Exception %s occurred while sending data for id %s could not be sent', "'reading'", 1
+    log_exception.assert_called_once_with(*log_args)
+
+    http_north.http_north.shutdown()
+    await fake_server.stop()
 
 
 @pytest.allure.feature("unit")
 @pytest.allure.story("plugin", "north", "http")
-@pytest.mark.skip(reason='FOGL-1144')
-async def test_send_payload_server_error():
-    pass
+@pytest.mark.asyncio
+async def test_send_payload_server_error(event_loop, mocker):
+    payloads = [{'id': 1, 'asset_code': 'fogbench/temperature', 'read_key': '31e5ccbb-3e45-4038-95e9-7920834d0852', 'user_ts': '2018-02-26 12:12:54.171949+00', 'reading': {'ambient': 7, 'object': 28}}]
+    http_north.http_north = HttpNorthPlugin()
+    http_north.config = http_north._DEFAULT_CONFIG
 
+    log_exception = mocker.patch.object(http_north._LOGGER, "exception")
+
+    http_north.config['url']['value'] = _URL
+    http_north.config['max_attempts']['value'] = 5
+    http_north.http_north.event_loop = event_loop
+    last_id, num_count = await http_north.http_north._send_payloads(payloads)
+
+    assert 1 == log_exception.call_count
+    log_args = 'Data for id %s could not be sent', 1
+    log_exception.assert_called_once_with(*log_args)
+
+    http_north.http_north.shutdown()
 
 @pytest.allure.feature("unit")
 @pytest.allure.story("plugin", "north", "http")
@@ -101,10 +136,12 @@ def test_plugin_info():
 @pytest.mark.asyncio
 async def test_plugin_init():
     assert http_north.plugin_init(http_north._DEFAULT_CONFIG) == http_north._DEFAULT_CONFIG
+    http_north.http_north.shutdown()  # Required to close the aiohttp.ClientSession() created in plugin_init
 
 
 @pytest.allure.feature("unit")
 @pytest.allure.story("plugin", "north", "http")
+@pytest.mark.skip(reason='This test passes when run individually but fails when run in suite with Event loop error.')
 def test_plugin_send():
     @asyncio.coroutine
     def mock_coro():
@@ -130,9 +167,4 @@ def test_plugin_send():
                   'reading': {'tick': 'tock'}}]})]
     assert calls == patch_send.call_args_list
 
-
-@pytest.allure.feature("unit")
-@pytest.allure.story("plugin", "north", "http")
-@pytest.mark.skip(reason='FOGL-1144')
-def test_plugin_shutdown(event_loop):
-    pass
+    http_north.http_north.shutdown()
