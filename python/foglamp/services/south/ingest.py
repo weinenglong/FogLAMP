@@ -14,7 +14,7 @@ from typing import List, Union
 import json
 from foglamp.common import logger
 from foglamp.common import statistics
-from foglamp.common.storage_client.storage_client import ReadingsStorageClientAsync, StorageClientAsync
+# from foglamp.common.storage_client.storage_client import ReadingsStorageClientAsync, StorageClientAsync
 from foglamp.common.storage_client.exceptions import StorageServerError
 
 __author__ = "Terris Linenbach, Amarendra K Sinha"
@@ -204,8 +204,11 @@ class Ingest(object):
         cls._core_management_port = core_mgt_port
         cls._parent_service = parent
 
-        cls.readings_storage_async = ReadingsStorageClientAsync(cls._core_management_host, cls._core_management_port)
-        cls.storage_async = StorageClientAsync(cls._core_management_host, cls._core_management_port)
+        cls.readings_storage_async = parent._readings_storage_async
+        cls.storage_async = parent._storage_async
+
+        # cls.readings_storage_async = ReadingsStorageClientAsync(cls._core_management_host, cls._core_management_port)
+        # cls.storage_async = StorageClientAsync(cls._core_management_host, cls._core_management_port)
 
         await cls._read_config()
 
@@ -610,11 +613,12 @@ class Ingest(object):
 
         # When the current list is full, move on to the next list
         if cls._max_concurrent_readings_inserts > 1 and (
-                    list_size >= cls._readings_insert_batch_size):
+            list_size >= cls._readings_insert_batch_size or (
+                time.time() - cls._last_insert_time) >= cls._readings_insert_batch_timeout_seconds):
             # Start at the beginning to reduce the number of connections
             for list_index in range(cls._max_concurrent_readings_inserts):
                 if len(cls._readings_lists[list_index]) < cls._readings_insert_batch_size:
                     cls._current_readings_list_index = list_index
-                    # _LOGGER.debug('Change Ingest Queue: from #%s (len %s) to #%s', cls._current_readings_list_index,
-                    #               len(cls._readings_lists[list_index]), list_index)
+                    _LOGGER.debug('Change Ingest Queue: from #%s (len %s) to #%s', cls._current_readings_list_index,
+                                  len(cls._readings_lists[list_index]), list_index)
                     break
