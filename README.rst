@@ -6,6 +6,8 @@
 *******
 FogLAMP
 *******
+[![Build Status](http://34.224.63.46:8080/job/foglamp_develop/badge/icon)](http://34.224.63.46:8080/job/foglamp_develop/)
+![Coverage](http://34.224.63.46:8080/coverage/foglamp_develop)
 
 This is the FogLAMP project.
 
