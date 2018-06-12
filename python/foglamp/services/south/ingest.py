@@ -231,19 +231,27 @@ class Ingest(object):
         cls._readings_list_not_empty = []
         cls._readings_lists = []
 
+        cls.ingest_semaphore = asyncio.Semaphore(2)
+
         for _ in range(cls._max_concurrent_readings_inserts):
             cls._readings_lists.append([])
             cls._insert_readings_wait_tasks.append(None)
-            cls._insert_readings_tasks.append(asyncio.ensure_future(cls._insert_readings(_)))
+            t = asyncio.ensure_future(cls.t1(_))
+            cls._insert_readings_tasks.append(t)
             cls._readings_list_batch_size_reached.append(asyncio.Event())
             cls._readings_list_not_empty.append(asyncio.Event())
 
         cls._readings_lists_not_full = asyncio.Event()
 
-        cls.ingest_semaphore = asyncio.Semaphore(value=cls._max_concurrent_readings_inserts)
+
 
         cls._stop = False
         cls._started = True
+
+    @classmethod
+    async def t1(cls, _):
+        async with cls.ingest_semaphore:
+            await cls._insert_readings(_)
 
     @classmethod
     async def stop(cls):
@@ -362,8 +370,8 @@ class Ingest(object):
                     time.time() - cls._last_insert_time) < cls._readings_insert_batch_timeout_seconds):
                 continue
 
-            async with cls.ingest_semaphore as sem:
-                await cls.write_readings(readings_list)
+            # async with cls.ingest_semaphore as sem:
+            await cls.write_readings(readings_list)
 
         _LOGGER.info('Insert readings loop stopped')
 
@@ -597,7 +605,7 @@ class Ingest(object):
 
         if list_size == cls._readings_insert_batch_size:
             cls._readings_list_batch_size_reached[list_index].set()
-            # _LOGGER.debug('Set event list index: %s size: %s', cls._current_readings_list_index, len(readings_list))
+            _LOGGER.debug('Set event list index: %s size: %s', cls._current_readings_list_index, len(readings_list))
 
         # When the current list is full, move on to the next list
         if cls._max_concurrent_readings_inserts > 1 and (
@@ -606,6 +614,6 @@ class Ingest(object):
             for list_index in range(cls._max_concurrent_readings_inserts):
                 if len(cls._readings_lists[list_index]) < cls._readings_insert_batch_size:
                     cls._current_readings_list_index = list_index
-                    # _LOGGER.debug('Change Ingest Queue: from #%s (len %s) to #%s', cls._current_readings_list_index,
-                    #               len(cls._readings_lists[list_index]), list_index)
+                    _LOGGER.debug('Change Ingest Queue: from #%s (len %s) to #%s', cls._current_readings_list_index,
+                                  len(cls._readings_lists[list_index]), list_index)
                     break
