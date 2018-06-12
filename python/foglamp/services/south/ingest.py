@@ -97,13 +97,13 @@ class Ingest(object):
     _write_statistics_frequency_seconds = 5
     """The number of seconds to wait before writing readings-related statistics to storage"""
 
-    _readings_buffer_size = 4096
+    _readings_buffer_size = 40960
     """Maximum number of readings to buffer in memory(_max_concurrent_readings_inserts x _readings_insert_batch_size)"""
 
     _max_concurrent_readings_inserts = 4
     """Maximum number of concurrent processes that send batches of readings to storage. Preferably in multiples of 2."""
 
-    _readings_insert_batch_size = 1024
+    _readings_insert_batch_size = 10240
     """Maximum number of readings in a batch of inserts. Preferably in multiples of 2."""
 
     _readings_insert_batch_timeout_seconds = 1
@@ -195,17 +195,15 @@ class Ingest(object):
             config['max_readings_insert_batch_reconnect_wait_seconds']['value'])
 
     @classmethod
-    async def start(cls, core_mgt_host, core_mgt_port, parent):
+    async def start(cls, parent):
         """Starts the server"""
         if cls._started:
             return
 
-        cls._core_management_host = core_mgt_host
-        cls._core_management_port = core_mgt_port
         cls._parent_service = parent
 
-        cls.readings_storage_async = ReadingsStorageClientAsync(cls._core_management_host, cls._core_management_port)
-        cls.storage_async = StorageClientAsync(cls._core_management_host, cls._core_management_port)
+        cls.readings_storage_async = cls._parent_service. _readings_storage_async
+        cls.storage_async = cls._parent_service._storage_async
 
         await cls._read_config()
 
@@ -241,6 +239,8 @@ class Ingest(object):
             cls._readings_list_not_empty.append(asyncio.Event())
 
         cls._readings_lists_not_full = asyncio.Event()
+
+        cls.ingest_semaphore = asyncio.Semaphore(value=cls._max_concurrent_readings_inserts)
 
         cls._stop = False
         cls._started = True
@@ -302,7 +302,6 @@ class Ingest(object):
         readings_list = cls._readings_lists[list_index]
         min_readings_reached = cls._readings_list_batch_size_reached[list_index]
         list_not_empty = cls._readings_list_not_empty[list_index]
-        lists_not_full = cls._readings_lists_not_full
 
         while True:
             # Wait for enough items in the list to fill a batch
@@ -363,52 +362,58 @@ class Ingest(object):
                     time.time() - cls._last_insert_time) < cls._readings_insert_batch_timeout_seconds):
                 continue
 
-            attempt = 0
-            cls._last_insert_time = time.time()
-
-            # Perform insert. Retry when fails.
-            while True:
-                try:
-                    payload = dict()
-                    payload['readings'] = readings_list
-                    batch_size = len(payload['readings'])
-                    # _LOGGER.debug('Begin insert: Queue index: %s Batch size: %s', list_index, batch_size)
-                    try:
-                        await cls.readings_storage_async.append(json.dumps(payload))
-                        cls._readings_stats += batch_size
-                    except StorageServerError as ex:
-                        err_response = ex.error
-                        # if key error in next, it will be automatically in parent except block
-                        if err_response["retryable"]:  # retryable is bool
-                            # raise and exception handler will retry
-                            _LOGGER.warning("Got %s error, retrying ...", err_response["source"])
-                            raise
-                        else:
-                            # not retryable
-                            _LOGGER.error("%s, %s", err_response["source"], err_response["message"])
-                            batch_size = len(readings_list)
-                            cls._discarded_readings_stats += batch_size
-                    # _LOGGER.debug('End insert: Queue index: %s Batch size: %s', list_index, batch_size)
-                    break
-                except Exception as ex:
-                    attempt += 1
-
-                    # TODO logging each time is overkill
-                    _LOGGER.exception('Insert failed on attempt #%s, list index: %s | %s', attempt, list_index, str(ex))
-
-                    if cls._stop or attempt >= _MAX_ATTEMPTS:
-                        # Stopping. Discard the entire list upon failure.
-                        batch_size = len(readings_list)
-                        cls._discarded_readings_stats += batch_size
-                        _LOGGER.warning('Insert failed: Queue index: %s Batch size: %s', list_index, batch_size)
-                        break
-
-            del readings_list[:batch_size]
-
-            if not lists_not_full.is_set():
-                lists_not_full.set()
+            async with cls.ingest_semaphore as sem:
+                await cls.write_readings(readings_list)
 
         _LOGGER.info('Insert readings loop stopped')
+
+    @classmethod
+    async def write_readings(cls, readings_list):
+        lists_not_full = cls._readings_lists_not_full
+        attempt = 0
+        cls._last_insert_time = time.time()
+
+        # Perform insert. Retry when fails.
+        while True:
+            try:
+                payload = dict()
+                payload['readings'] = readings_list
+                batch_size = len(payload['readings'])
+                # _LOGGER.debug('Begin insert: Queue index: %s Batch size: %s', list_index, batch_size)
+                try:
+                    await cls.readings_storage_async.append(json.dumps(payload))
+                    cls._readings_stats += batch_size
+                except StorageServerError as ex:
+                    err_response = ex.error
+                    # if key error in next, it will be automatically in parent except block
+                    if err_response["retryable"]:  # retryable is bool
+                        # raise and exception handler will retry
+                        _LOGGER.warning("Got %s error, retrying ...", err_response["source"])
+                        raise
+                    else:
+                        # not retryable
+                        _LOGGER.error("%s, %s", err_response["source"], err_response["message"])
+                        batch_size = len(readings_list)
+                        cls._discarded_readings_stats += batch_size
+                # _LOGGER.debug('End insert: Queue index: %s Batch size: %s', list_index, batch_size)
+                break
+            except Exception as ex:
+                attempt += 1
+
+                # TODO logging each time is overkill
+                _LOGGER.exception('Insert failed on attempt #%s, list index: %s | %s', attempt, list_index, str(ex))
+
+                if cls._stop or attempt >= _MAX_ATTEMPTS:
+                    # Stopping. Discard the entire list upon failure.
+                    batch_size = len(readings_list)
+                    cls._discarded_readings_stats += batch_size
+                    _LOGGER.warning('Insert failed: Queue index: %s Batch size: %s', list_index, batch_size)
+                    break
+
+        del readings_list[:batch_size]
+
+        if not lists_not_full.is_set():
+            lists_not_full.set()
 
     @classmethod
     async def _write_statistics(cls):
