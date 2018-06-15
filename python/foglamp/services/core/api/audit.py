@@ -216,7 +216,7 @@ async def get_audit_entries(request):
             payload.OFFSET(offset)
 
         # SELECT * FROM log <payload.payload()>
-        results = storage_client.query_tbl_with_payload('log', payload.payload())
+        results = await storage_client.query_tbl_with_payload('log', payload.payload())
         res = []
         for row in results['rows']:
             r = dict()
