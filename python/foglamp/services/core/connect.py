@@ -6,7 +6,7 @@
 
 
 from foglamp.services.core.service_registry.service_registry import ServiceRegistry
-from foglamp.common.storage_client.storage_client import StorageClient
+from foglamp.common.storage_client.storage_client import StorageClient, StorageClientAsync
 from foglamp.common import logger
 
 __author__ = "Ashish Jabble"
@@ -26,6 +26,19 @@ def get_storage():
         services = ServiceRegistry.get(name="FogLAMP Storage")
         storage_svc = services[0]
         _storage = StorageClient(core_management_host=None, core_management_port=None,
+                                 svc=storage_svc)
+        # _logger.info(type(_storage))
+    except Exception as ex:
+        _logger.exception(str(ex))
+        raise
+    return _storage
+
+def get_storage_async():
+    """ Storage Object """
+    try:
+        services = ServiceRegistry.get(name="FogLAMP Storage")
+        storage_svc = services[0]
+        _storage = StorageClientAsync(core_management_host=None, core_management_port=None,
                                  svc=storage_svc)
         # _logger.info(type(_storage))
     except Exception as ex:

@@ -201,6 +201,7 @@ async def add_configuration_item(request):
 
     try:
         storage_client = connect.get_storage()
+        storage_client_async = connect.get_storage_async()
         cf_mgr = ConfigurationManager(storage_client)
 
         data = await request.json()
@@ -237,7 +238,7 @@ async def add_configuration_item(request):
         response = result['response']
 
         # logged audit new config item for category
-        audit = AuditLogger(storage_client)
+        audit = AuditLogger(storage_client_async)
         audit_details = {'category': category_name, 'item': new_config_item, 'value': config_item_dict}
         await audit.information('CONAD', audit_details)
 

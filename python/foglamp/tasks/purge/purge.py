@@ -67,7 +67,7 @@ class Purge(FoglampProcess):
     def __init__(self, loop=None):
         super().__init__()
         self._logger = logger.setup("Data Purge")
-        self._audit = AuditLogger(self._storage)
+        self._audit = AuditLogger(self._storage_async)
         self.loop = asyncio.get_event_loop() if loop is None else loop
 
     def write_statistics(self, total_purged, unsent_purged):

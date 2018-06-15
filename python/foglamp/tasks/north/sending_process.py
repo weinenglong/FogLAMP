@@ -1197,7 +1197,7 @@ class SendingProcess:
             self._storage_async = StorageClientAsync(self._mgt_address, self._mgt_port)
             self._readings = ReadingsStorageClientAsync(self._mgt_address, self._mgt_port)
             self._storage = StorageClient(self._mgt_address, self._mgt_port)
-            self._audit = AuditLogger(self._storage)
+            self._audit = AuditLogger(self._storage_async)
         except Exception as ex:
             message = _MESSAGES_LIST["e000023"].format(str(ex))
             SendingProcess._logger.exception(message)
