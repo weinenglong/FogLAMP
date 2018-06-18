@@ -24,7 +24,7 @@ from foglamp.common.configuration_manager import ConfigurationManager
 
 from foglamp.common.web import middleware
 from foglamp.common.storage_client.exceptions import *
-from foglamp.common.storage_client.storage_client import StorageClient
+from foglamp.common.storage_client.storage_client import StorageClient, StorageClientAsync
 
 from foglamp.services.core import routes as admin_routes
 from foglamp.services.core.api import configuration as conf_api
@@ -175,6 +175,9 @@ class Server:
 
     _storage_client = None
     """ Storage client to storage service """
+
+    _storage_client_async = None
+    """ Async Storage client to storage service """
 
     _configuration_manager = None
     """ Instance of configuration manager (singleton) """
@@ -391,11 +394,12 @@ class Server:
     @classmethod
     async def _get_storage_client(cls):
         storage_service = None
-        while storage_service is None and cls._storage_client is None:
+        while storage_service is None and cls._storage_client is None and cls._storage_client_async is None:
             try:
                 found_services = ServiceRegistry.get(name="FogLAMP Storage")
                 storage_service = found_services[0]
                 cls._storage_client = StorageClient(cls._host, cls.core_management_port, svc=storage_service)
+                cls._storage_client_async = StorageClientAsync(cls._host, cls.core_management_port, svc=storage_service)
             except (service_registry_exceptions.DoesNotExist, InvalidServiceInstance, StorageServiceUnavailable, Exception) as ex:
                 await asyncio.sleep(5)
 
@@ -510,17 +514,17 @@ class Server:
 
             # If readings table is empty, set last_object of all streams to 0
             total_count_payload = payload_builder.PayloadBuilder().AGGREGATE(["count", "*"]).ALIAS("aggregate", ("*", "count", "count")).payload()
-            result = cls._storage_client.query_tbl_with_payload('readings', total_count_payload)
+            result = loop.run_until_complete(cls._storage_client_async.query_tbl_with_payload('readings', total_count_payload))
             total_count = result['rows'][0]['count']
             if (total_count == 0):
                 _logger.info("'foglamp.readings' table is empty, force reset of 'foglamp.streams' last_objects")
                 payload = payload_builder.PayloadBuilder().SET(last_object=0, ts='now()').payload()
-                cls._storage_client.update_tbl("streams", payload)
+                loop.run_until_complete(cls._storage_client_async.update_tbl("streams", payload))
             else:
                 _logger.info("'foglamp.readings' has " + str(total_count) + " rows, 'foglamp.streams' last_objects reset is not required")    
 
             # obtain configuration manager and interest registry
-            cls._configuration_manager = ConfigurationManager(cls._storage_client)
+            cls._configuration_manager = ConfigurationManager(cls._storage_client_async)
             cls._interest_registry = InterestRegistry(cls._configuration_manager)
 
             # start scheduler
