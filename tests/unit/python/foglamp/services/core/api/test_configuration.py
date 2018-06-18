@@ -12,7 +12,7 @@ import pytest
 
 from foglamp.services.core import routes
 from foglamp.services.core import connect
-from foglamp.common.storage_client.storage_client import StorageClient
+from foglamp.common.storage_client.storage_client import StorageClientAsync
 from foglamp.common.configuration_manager import ConfigurationManager
 from foglamp.common.audit_logger import AuditLogger
 
@@ -39,7 +39,7 @@ class TestConfiguration:
 
         result = {'categories': [{'key': 'rest_api', 'description': 'User REST API'},
                                  {'key': 'service', 'description': 'Service configuration'}]}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_all_category_names', return_value=async_mock()) as patch_get_all_items:
@@ -54,7 +54,7 @@ class TestConfiguration:
         async def async_mock():
             return None
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_all_items', return_value=async_mock()) as patch_get_all_items:
@@ -72,7 +72,7 @@ class TestConfiguration:
         async def async_mock():
             return result
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_all_items', return_value=async_mock()) as patch_get_all_items:
@@ -87,7 +87,7 @@ class TestConfiguration:
         async def async_mock():
             return None
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_item', return_value=async_mock()) as patch_get_cat_item:
@@ -103,7 +103,7 @@ class TestConfiguration:
         async def async_mock():
             return result
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_item', return_value=async_mock()) as patch_get_cat_item:
@@ -125,7 +125,7 @@ class TestConfiguration:
         async def async_mock():
             return result
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'set_category_item_value_entry', return_value=async_mock_set_item()) as patch_set_entry:
@@ -141,7 +141,7 @@ class TestConfiguration:
 
     async def test_set_config_item_bad_request(self, client, category_name='rest_api', item_name='http_port'):
         payload = {"valu": '8082'}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             resp = await client.put('/foglamp/category/{}/{}'.format(category_name, item_name),
                                     data=json.dumps(payload))
@@ -153,7 +153,7 @@ class TestConfiguration:
             return None
 
         payload = {"value": '8082'}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'set_category_item_value_entry', return_value=async_mock()) as patch_set_entry:
@@ -167,7 +167,7 @@ class TestConfiguration:
 
     async def test_set_config_item_exception(self, client, category_name='rest_api', item_name='http_port'):
         payload = {"value": '8082'}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'set_category_item_value_entry', side_effect=ValueError) as patch_set_entry:
@@ -186,7 +186,7 @@ class TestConfiguration:
         async def async_mock():
             return result
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_item', side_effect=[async_mock(), async_mock()]) as patch_get_cat_item:
@@ -206,7 +206,7 @@ class TestConfiguration:
         async def async_mock():
             return None
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_item', return_value=async_mock()) as patch_get_cat_item:
@@ -225,7 +225,7 @@ class TestConfiguration:
         async def async_mock(return_value):
             return return_value
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_item', side_effect=[async_mock(result), async_mock(None)]) as patch_get_cat_item:
@@ -250,7 +250,7 @@ class TestConfiguration:
         ({"description": "desc", "value": "val"}, "\"'key' param required to create a category\""),
     ])
     async def test_create_category_bad_request(self, client, payload, message):
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             resp = await client.post('/foglamp/category', data=json.dumps(payload))
             assert 400 == resp.status
@@ -266,7 +266,7 @@ class TestConfiguration:
         async def async_mock():
             return info
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'create_category', return_value=async_mock_create_cat()) as patch_create_cat:
@@ -284,7 +284,7 @@ class TestConfiguration:
         info = {'info': {'type': 'boolean', 'value': 'False', 'description': 'Test', 'default': 'False'}}
         payload = {"key": name, "description": desc, "value": info, "keep_original_items": "bla"}
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             resp = await client.post('/foglamp/category', data=json.dumps(payload))
@@ -301,7 +301,7 @@ class TestConfiguration:
         async def async_mock():
             return None
 
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'create_category', return_value=async_mock_create_cat()) as patch_create_cat:
@@ -335,7 +335,7 @@ class TestConfiguration:
         ({"description": "1", "type": "integer"}, "entry_val must be a string for item_name info and entry_name value")
     ])
     async def test_validate_data_for_add_config_item(self, client, payload, message):
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             resp = await client.post('/foglamp/category/{}/{}'.format("cat", "info"), data=json.dumps(payload))
             assert 400 == resp.status
@@ -347,7 +347,7 @@ class TestConfiguration:
 
         category_name = 'blah'
         payload = {"default": "1", "description": "Test description", "type": "integer"}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_all_items', return_value=async_mock()) as patch_get_all_items:
@@ -362,7 +362,7 @@ class TestConfiguration:
 
         category_name = 'cat'
         payload = {"default": "1", "description": "Test description", "type": "integer"}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_all_items', return_value=async_mock()) as patch_get_all_items:
@@ -386,7 +386,7 @@ class TestConfiguration:
         new_config_item = 'info1'
         expected = {'rows_affected': 1, "response": "updated"}
         result = {'message': '{} config item has been saved for {} category'.format(new_config_item, category_name)}
-        storage_client_mock = MagicMock(StorageClient)
+        storage_client_mock = MagicMock(StorageClientAsync)
         c_mgr = ConfigurationManager(storage_client_mock)
         with patch.object(connect, 'get_storage', return_value=storage_client_mock):
             with patch.object(c_mgr, 'get_category_all_items', return_value=async_mock()) as patch_get_all_items:
