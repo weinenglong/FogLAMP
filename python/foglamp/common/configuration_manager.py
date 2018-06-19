@@ -11,7 +11,7 @@ import inspect
 
 from foglamp.common.storage_client.payload_builder import PayloadBuilder
 from foglamp.common.storage_client.storage_client import StorageClientAsync
-
+from foglamp.common.storage_client.exceptions import StorageServerError
 from foglamp.common import logger
 from foglamp.common.audit_logger import AuditLogger
 
@@ -162,6 +162,16 @@ class ConfigurationManager(ConfigurationManagerSingleton):
             response = result['response']
         except KeyError:
             raise ValueError(result['message'])
+        except StorageServerError as ex:
+            err_response = ex.error
+            # if key error in next, it will be automatically in parent except block
+            if err_response["retryable"]:  # retryable is bool
+                # raise and exception handler will retry
+                _logger.warning("Got %s error, retrying ...", err_response["source"])
+                raise
+            else:
+                # not retryable
+                raise ValueError(err_response)
 
     async def _read_all_category_names(self):
         # SELECT configuration.key, configuration.description, configuration.value, configuration.ts FROM configuration
@@ -212,19 +222,32 @@ class ConfigurationManager(ConfigurationManagerSingleton):
         return results['rows'][0]['value']
 
     async def _update_value_val(self, category_name, item_name, new_value_val):
-        old_value = await self._read_value_val(category_name, item_name)
-        # UPDATE foglamp.configuration
-        # SET value = jsonb_set(value, '{retainUnsent,value}', '"12"')
-        # WHERE key='PURGE_READ'
-        payload = PayloadBuilder().SELECT("key", "description", "ts", "value")\
-            .JSON_PROPERTY(("value", [item_name, "value"], new_value_val))\
-            .FORMAT("return", ("ts", "YYYY-MM-DD HH24:MI:SS.MS"))\
-            .WHERE(["key", "=", category_name]).payload()
+        try:
+            old_value = await self._read_value_val(category_name, item_name)
+            # UPDATE foglamp.configuration
+            # SET value = jsonb_set(value, '{retainUnsent,value}', '"12"')
+            # WHERE key='PURGE_READ'
+            payload = PayloadBuilder().SELECT("key", "description", "ts", "value")\
+                .JSON_PROPERTY(("value", [item_name, "value"], new_value_val))\
+                .FORMAT("return", ("ts", "YYYY-MM-DD HH24:MI:SS.MS"))\
+                .WHERE(["key", "=", category_name]).payload()
 
-        await self._storage.update_tbl("configuration", payload)
-        audit = AuditLogger(self._storage)
-        audit_details = {'category': category_name, 'item': item_name, 'oldValue': old_value, 'newValue': new_value_val}
-        await audit.information('CONCH', audit_details)
+            await self._storage.update_tbl("configuration", payload)
+            audit = AuditLogger(self._storage)
+            audit_details = {'category': category_name, 'item': item_name, 'oldValue': old_value, 'newValue': new_value_val}
+            await audit.information('CONCH', audit_details)
+        except KeyError as ex:
+            raise ValueError(str(ex))
+        except StorageServerError as ex:
+            err_response = ex.error
+            # if key error in next, it will be automatically in parent except block
+            if err_response["retryable"]:  # retryable is bool
+                # raise and exception handler will retry
+                _logger.warning("Got %s error, retrying ...", err_response["source"])
+                raise
+            else:
+                # not retryable
+                raise ValueError(err_response)
 
     async def _update_category(self, category_name, category_val, category_description):
         try:
@@ -234,6 +257,16 @@ class ConfigurationManager(ConfigurationManagerSingleton):
             response = result['response']
         except KeyError:
             raise ValueError(result['message'])
+        except StorageServerError as ex:
+            err_response = ex.error
+            # if key error in next, it will be automatically in parent except block
+            if err_response["retryable"]:  # retryable is bool
+                # raise and exception handler will retry
+                _logger.warning("Got %s error, retrying ...", err_response["source"])
+                raise
+            else:
+                # not retryable
+                raise ValueError(err_response)
 
     async def get_all_category_names(self):
         """Get all category names in the FogLAMP system
