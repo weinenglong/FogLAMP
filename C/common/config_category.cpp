@@ -93,8 +93,8 @@ string ConfigCategoryDescription::toJSON() const
 {
 	ostringstream convert;
 
-	convert << "{ \"key\": \"" << m_name << "\", ";
-	convert << "\"description\" : \"" << m_description << "\" }";
+	convert << "{\"key\": \"" << m_name << "\", ";
+	convert << "\"description\" : \"" << m_description << "\"}";
 
 	return convert.str();
 }
@@ -107,7 +107,7 @@ string ConfigCategories::toJSON() const
 {
 	ostringstream convert;
 
-	convert << "{";
+	convert << "[";
 	for (auto it = m_categories.cbegin(); it != m_categories.cend(); it++)
 	{
 		convert << (*it)->toJSON();
@@ -116,7 +116,7 @@ string ConfigCategories::toJSON() const
                         convert << ", ";
 		}
 	}
-	convert << "}";
+	convert << "]";
 
 	return convert.str();
 }
