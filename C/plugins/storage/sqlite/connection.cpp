@@ -18,7 +18,7 @@
 #include "rapidjson/error/error.h"
 #include "rapidjson/error/en.h"
 #include <string>
-#include <regex>
+#include <map>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sstream>
@@ -113,9 +113,10 @@ bool Connection::applyColumnDateTimeFormat(sqlite3_stmt *pStmt,
 	 * Thus we apply default FOGLAMP formatting:
 	 * "%Y-%m-%d %H:%M:%f" with 'localtime'
 	 */
-
 	if (sqlite3_column_database_name(pStmt, i) != NULL &&
-		sqlite3_column_table_name(pStmt, i) != NULL)
+		sqlite3_column_table_name(pStmt, i) != NULL &&
+		(strcmp(sqlite3_column_origin_name(pStmt, i),
+			sqlite3_column_name(pStmt, i)) == 0))
 	{
 		const char* pzDataType;
 		int retType = sqlite3_table_column_metadata(dbHandle,
@@ -303,6 +304,9 @@ Connection::Connection()
 	{
 		dbPath = defaultConnection;
 	}
+
+	// Allow usage of URI for filename
+	sqlite3_config(SQLITE_CONFIG_URI, 1);
 
 	/**
 	 * Make a connection to the database
@@ -829,19 +833,9 @@ int		col = 0;
 		if (itr->value.IsString())
 		{
 			const char *str = itr->value.GetString();
-			// Check if the string is a function
-			string s (str);
-  			regex e ("[a-zA-Z][a-zA-Z0-9_]*\\(.*\\)");
-  			if (regex_match (s,e))
+			if (strcmp(str, "now()") == 0)
 			{
-				if (strcmp(str, "now()") == 0)
-				{
-					values.append(SQLITE3_NOW);
-				}
-				else
-				{
-					values.append(str);
-				}
+				values.append(SQLITE3_NOW);
 			}
 			else
 			{
@@ -940,19 +934,9 @@ int		col = 0;
 				if (itr->value.IsString())
 				{
 					const char *str = itr->value.GetString();
-					// Check if the string is a function
-					string s (str);
-					regex e ("[a-zA-Z][a-zA-Z0-9_]*\\(.*\\)");
-					if (regex_match (s,e))
+					if (strcmp(str, "now()") == 0)
 					{
-						if (strcmp(str, "now()") == 0)
-						{
-							sql.append(SQLITE3_NOW);
-						}
-						else
-						{
-							sql.append(str);
-						}
+						sql.append(SQLITE3_NOW);
 					}
 					else
 					{
@@ -1026,12 +1010,9 @@ int		col = 0;
 				if (value.IsString())
 				{
 					const char *str = value.GetString();
-					// Check if the string is a function
-					string s (str);
-					regex e ("[a-zA-Z][a-zA-Z0-9_]*\\(.*\\)");
-					if (regex_match (s,e))
+					if (strcmp(str, "now()") == 0)
 					{
-						sql.append(str);
+						sql.append(SQLITE3_NOW);
 					}
 					else
 					{
@@ -1136,12 +1117,9 @@ int		col = 0;
 				if (value.IsString())
 				{
 					const char *str = value.GetString();
-					// Check if the string is a function
-					string s (str);
-					regex e ("[a-zA-Z][a-zA-Z0-9_]*\\(.*\\)");
-					if (regex_match (s,e))
+					if (strcmp(str, "now()") == 0)
 					{
-						sql.append(str);
+						sql.append(SQLITE3_NOW);
 					}
 					else
 					{
@@ -1374,19 +1352,9 @@ int		row = 0;
 		sql.append(buffer.GetString());
 		sql.append("\', ");
 		const char *str = (*itr)["user_ts"].GetString();
-		// Check if the string is a function
-		string s (str);
-		regex e ("[a-zA-Z][a-zA-Z0-9_]*\\(.*\\)");
-		if (regex_match (s,e))
+		if (strcmp(str, "now()") == 0)
 		{
-			if (strcmp(str, "now()") == 0)
-			{
-				sql.append(SQLITE3_NOW);
-			}
-			else
-			{
-				sql.append(str);
-			}
+			sql.append(SQLITE3_NOW);
 		}
 		else
 		{
