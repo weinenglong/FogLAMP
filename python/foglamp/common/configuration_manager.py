@@ -164,14 +164,7 @@ class ConfigurationManager(ConfigurationManagerSingleton):
             raise ValueError(result['message'])
         except StorageServerError as ex:
             err_response = ex.error
-            # if key error in next, it will be automatically in parent except block
-            if err_response["retryable"]:  # retryable is bool
-                # raise and exception handler will retry
-                _logger.warning("Got %s error, retrying ...", err_response["source"])
-                raise
-            else:
-                # not retryable
-                raise ValueError(err_response)
+            raise ValueError(err_response)
 
     async def _read_all_category_names(self):
         # SELECT configuration.key, configuration.description, configuration.value, configuration.ts FROM configuration
@@ -240,14 +233,7 @@ class ConfigurationManager(ConfigurationManagerSingleton):
             raise ValueError(str(ex))
         except StorageServerError as ex:
             err_response = ex.error
-            # if key error in next, it will be automatically in parent except block
-            if err_response["retryable"]:  # retryable is bool
-                # raise and exception handler will retry
-                _logger.warning("Got %s error, retrying ...", err_response["source"])
-                raise
-            else:
-                # not retryable
-                raise ValueError(err_response)
+            raise ValueError(err_response)
 
     async def _update_category(self, category_name, category_val, category_description):
         try:
@@ -259,14 +245,7 @@ class ConfigurationManager(ConfigurationManagerSingleton):
             raise ValueError(result['message'])
         except StorageServerError as ex:
             err_response = ex.error
-            # if key error in next, it will be automatically in parent except block
-            if err_response["retryable"]:  # retryable is bool
-                # raise and exception handler will retry
-                _logger.warning("Got %s error, retrying ...", err_response["source"])
-                raise
-            else:
-                # not retryable
-                raise ValueError(err_response)
+            raise ValueError(err_response)
 
     async def get_all_category_names(self):
         """Get all category names in the FogLAMP system
