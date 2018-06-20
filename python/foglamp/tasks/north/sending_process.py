@@ -1068,7 +1068,7 @@ class SendingProcess:
     def _fetch_configuration(self, cat_name=None, cat_desc=None, cat_config=None, cat_keep_original=False):
         """ Retrieves the configuration from the Configuration Manager"""
         SendingProcess._logger.debug("{0} - ".format("_fetch_configuration"))
-        cfg_manager = ConfigurationManager(self._storage)
+        cfg_manager = ConfigurationManager(self._storage_async)
         try:
             self._event_loop.run_until_complete(cfg_manager.create_category(cat_name,
                                                                             cat_config,

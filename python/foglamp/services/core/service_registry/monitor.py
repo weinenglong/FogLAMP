@@ -123,7 +123,7 @@ class Monitor(object):
             },
         }
 
-        storage_client = connect.get_storage()
+        storage_client = connect.get_storage_async()
         cfg_manager = ConfigurationManager(storage_client)
         await cfg_manager.create_category('SMNTR', default_config, 'Service Monitor')
 
