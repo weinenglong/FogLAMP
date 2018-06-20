@@ -8,6 +8,7 @@ import pytest
 from foglamp.common.configuration_manager import ConfigurationManager, ConfigurationManagerSingleton, _valid_type_strings, _logger
 from foglamp.common.storage_client.payload_builder import PayloadBuilder
 from foglamp.common.storage_client.storage_client import StorageClientAsync
+from foglamp.common.storage_client.exceptions import StorageServerError
 from foglamp.common.audit_logger import AuditLogger
 
 __author__ = "Ashwin Gopalakrishnan"
@@ -676,9 +677,31 @@ class TestConfigurationManager:
         with patch.object(_logger, 'exception') as log_exc:
             with patch.object(ConfigurationManager, '_validate_category_val', return_value=async_mock(None)) as valpatch:
                 with patch.object(ConfigurationManager, '_read_category_val', return_value=async_mock(None)) as readpatch:
-                    with patch.object(ConfigurationManager, '_create_new_category', side_effect=Exception()) as createpatch:
+                    with patch.object(ConfigurationManager, '_create_new_category', side_effect=StorageServerError(None, None, None)) as createpatch:
                         with patch.object(ConfigurationManager, '_run_callbacks') as callbackpatch:
-                            with pytest.raises(Exception):
+                            with pytest.raises(StorageServerError):
+                                await c_mgr.create_category('catname', 'catvalue', "catdesc")
+                        callbackpatch.assert_not_called()
+                    createpatch.assert_called_once_with('catname', None, 'catdesc')
+                readpatch.assert_called_once_with('catname')
+            valpatch.assert_called_once_with('catvalue', True)
+        assert 1 == log_exc.call_count
+        log_exc.assert_called_once_with('Unable to create new category based on category_name %s and category_description %s and category_json_schema %s', 'catname', 'catdesc', None)
+
+    @pytest.mark.asyncio
+    async def test_create_category_good_newval_keyerror_bad_create(self, reset_singleton):
+
+        async def async_mock(return_value):
+            return return_value
+
+        storage_client_mock = MagicMock(spec=StorageClientAsync)
+        c_mgr = ConfigurationManager(storage_client_mock)
+        with patch.object(_logger, 'exception') as log_exc:
+            with patch.object(ConfigurationManager, '_validate_category_val', return_value=async_mock(None)) as valpatch:
+                with patch.object(ConfigurationManager, '_read_category_val', return_value=async_mock(None)) as readpatch:
+                    with patch.object(ConfigurationManager, '_create_new_category', side_effect=KeyError()) as createpatch:
+                        with patch.object(ConfigurationManager, '_run_callbacks') as callbackpatch:
+                            with pytest.raises(KeyError):
                                 await c_mgr.create_category('catname', 'catvalue', "catdesc")
                         callbackpatch.assert_not_called()
                     createpatch.assert_called_once_with('catname', None, 'catdesc')
@@ -1102,11 +1125,11 @@ class TestConfigurationManager:
         async def async_mock(return_value):
             return return_value
 
-        category_name = 'catname'
         @asyncio.coroutine
         def mock_coro(*args, **kwargs):
             return {"rows": []}
 
+        category_name = 'catname'
         item_name = 'itemname'
         new_value_val = 'newval'
 
@@ -1120,6 +1143,54 @@ class TestConfigurationManager:
         auditinfopatch.assert_called_once_with(
             'CONCH', {
                 'category': category_name, 'item': item_name, 'oldValue': None, 'newValue': new_value_val})
+
+    @pytest.mark.asyncio
+    async def test__update_value_val_storageservererror(self, reset_singleton):
+        @asyncio.coroutine
+        def mock_coro(*args, **kwargs):
+            return {"rows": []}
+
+        category_name = 'catname'
+        item_name = 'itemname'
+        new_value_val = 'newval'
+
+        attrs = {"query_tbl_with_payload.return_value": mock_coro(), "update_tbl.return_value": mock_coro()}
+        storage_client_mock = MagicMock(spec=StorageClientAsync, **attrs)
+        c_mgr = ConfigurationManager(storage_client_mock)
+
+        with patch.object(AuditLogger, '__init__', return_value=None):
+            with patch.object(AuditLogger, 'information', return_value=None) as auditinfopatch:
+                with patch.object(ConfigurationManager, '_update_value_val',
+                                  side_effect=StorageServerError(None, None, None)) as createpatch:
+                    with pytest.raises(StorageServerError):
+                        await c_mgr._update_value_val(category_name, item_name, new_value_val)
+                createpatch.assert_called_once_with('catname', 'itemname', 'newval')
+
+        assert 0 == auditinfopatch.call_count
+
+    @pytest.mark.asyncio
+    async def test__update_value_val_keyerror(self, reset_singleton):
+        @asyncio.coroutine
+        def mock_coro(*args, **kwargs):
+            return {"rows": []}
+
+        category_name = 'catname'
+        item_name = 'itemname'
+        new_value_val = 'newval'
+
+        attrs = {"query_tbl_with_payload.return_value": mock_coro(), "update_tbl.return_value": mock_coro()}
+        storage_client_mock = MagicMock(spec=StorageClientAsync, **attrs)
+        c_mgr = ConfigurationManager(storage_client_mock)
+
+        with patch.object(AuditLogger, '__init__', return_value=None):
+            with patch.object(AuditLogger, 'information', return_value=None) as auditinfopatch:
+                with patch.object(ConfigurationManager, '_update_value_val',
+                                  side_effect=KeyError()) as createpatch:
+                    with pytest.raises(KeyError):
+                        await c_mgr._update_value_val(category_name, item_name, new_value_val)
+                createpatch.assert_called_once_with('catname', 'itemname', 'newval')
+
+        assert 0 == auditinfopatch.call_count
 
     @pytest.mark.asyncio
     async def test__update_category(self, reset_singleton, mocker):
@@ -1143,5 +1214,57 @@ class TestConfigurationManager:
                     pbpayloadpatch.assert_called_once_with()
                 pbwherepatch.assert_called_once_with(["key", "=", category_name])
             pbsetpatch.assert_called_once_with(description='catdesc', value='catval')
+        storage_client_mock.update_tbl.assert_called_once_with('configuration', None)
 
+    @pytest.mark.asyncio
+    async def test__update_category_storageservererror(self, reset_singleton, mocker):
+        @asyncio.coroutine
+        def mock_coro(*args, **kwargs):
+            return {"response": "dummy"}
+
+        category_name = 'catname'
+        category_description = 'catdesc'
+        category_val = 'catval'
+
+        attrs = {"update_tbl.return_value": mock_coro()}
+        storage_client_mock = MagicMock(spec=StorageClientAsync, **attrs)
+        c_mgr = ConfigurationManager(storage_client_mock)
+
+        with patch.object(PayloadBuilder, '__init__', return_value=None):
+            with patch.object(PayloadBuilder, 'SET', return_value=PayloadBuilder) as pbsetpatch:
+                with patch.object(PayloadBuilder, 'WHERE', return_value=PayloadBuilder) as pbwherepatch:
+                    with patch.object(PayloadBuilder, 'payload', return_value=None) as pbpayloadpatch:
+                        with patch.object(ConfigurationManager, '_update_category',
+                                          side_effect=StorageServerError(None, None, None)) as createpatch:
+                            with pytest.raises(StorageServerError):
+                                await c_mgr._update_category(category_name, category_val, category_description)
+                        createpatch.assert_called_once_with('catname', 'catval', 'catdesc')
+                    assert 0 == pbpayloadpatch.call_count
+                assert 0 == pbwherepatch.call_count
+            assert 0 == pbsetpatch.call_count
+        assert 0 == storage_client_mock.update_tbl.call_count
+
+    @pytest.mark.asyncio
+    async def test__update_category_keyerror(self, reset_singleton, mocker):
+        @asyncio.coroutine
+        def mock_coro(*args, **kwargs):
+            return {"noresponse": "dummy"}
+
+        category_name = 'catname'
+        category_description = 'catdesc'
+        category_val = 'catval'
+
+        attrs = {"update_tbl.return_value": mock_coro()}
+        storage_client_mock = MagicMock(spec=StorageClientAsync, **attrs)
+        c_mgr = ConfigurationManager(storage_client_mock)
+
+        with patch.object(PayloadBuilder, '__init__', return_value=None):
+            with patch.object(PayloadBuilder, 'SET', return_value=PayloadBuilder) as pbsetpatch:
+                with patch.object(PayloadBuilder, 'WHERE', return_value=PayloadBuilder) as pbwherepatch:
+                    with patch.object(PayloadBuilder, 'payload', return_value=None) as pbpayloadpatch:
+                        with pytest.raises(KeyError):
+                            await c_mgr._update_category(category_name, category_val, category_description)
+                    pbpayloadpatch.assert_called_once_with()
+                pbwherepatch.assert_called_once_with(["key", "=", category_name])
+            pbsetpatch.assert_called_once_with(description='catdesc', value='catval')
         storage_client_mock.update_tbl.assert_called_once_with('configuration', None)
