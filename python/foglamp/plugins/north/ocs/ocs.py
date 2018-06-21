@@ -489,22 +489,25 @@ class OCSNorthPlugin(omf.OmfNorthPlugin):
         typename = self._generate_omf_typename_automatic(sensor_id)
         new_tmp_dict = copy.deepcopy(_OMF_TEMPLATE_TYPE)
         omf_type = {typename: new_tmp_dict["typename"]}
+        # FIXME:
         # Handles Static section
         # Generates elements evaluating the StaticData retrieved form the Configuration Manager
-        omf_type[typename][0]["properties"]["Name"] = {
-                "type": "string",
-                "isindex": True
-            }
-        omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
-        for item in self._config['StaticData']:
-            omf_type[typename][0]["properties"][item] = {"type": "string"}
+        # omf_type[typename][0]["properties"]["Name"] = {
+        #         "type": "string",
+        #         "isindex": True
+        #     }
+        # omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
+        # for item in self._config['StaticData']:
+        #     omf_type[typename][0]["properties"][item] = {"type": "string"}
+
+        # FIXME:
         # Handles Dynamic section
-        omf_type[typename][1]["properties"]["Time"] = {
+        omf_type[typename][0]["properties"]["Time"] = {
               "type": "string",
               "format": "date-time",
               "isindex": True
             }
-        omf_type[typename][1]["id"] = type_id + "_" + typename + "_measurement"
+        omf_type[typename][0]["id"] = type_id + "_" + typename + "_measurement"
         for item in asset_data:
             item_type = plugin_common.evaluate_type(asset_data[item])
 
@@ -518,13 +521,13 @@ class OCSNorthPlugin(omf.OmfNorthPlugin):
             # Handles OMF format property to force the proper OCS type, especially for handling decimal numbers
             if item_type == "integer":
 
-                omf_type[typename][1]["properties"][item] = {"type": item_type,
+                omf_type[typename][0]["properties"][item] = {"type": item_type,
                                                              "format": self._config['formatInteger']}
             elif item_type == "number":
-                omf_type[typename][1]["properties"][item] = {"type": item_type,
+                omf_type[typename][0]["properties"][item] = {"type": item_type,
                                                              "format": self._config['formatNumber']}
             else:
-                omf_type[typename][1]["properties"][item] = {"type": item_type}
+                omf_type[typename][0]["properties"][item] = {"type": item_type}
 
         if _log_debug_level == 3:
             self._logger.debug("_create_omf_type_automatic - sensor_id |{0}| - omf_type |{1}| "

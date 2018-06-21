@@ -152,13 +152,13 @@ _OMF_SUFFIX_TYPENAME = "_typename"
 
 OMF_TEMPLATE_TYPE = {
     "typename": [
-        {
-            "id": "static-type-id",
-            "type": "object",
-            "classification": "static",
-            "properties": {
-            }
-        },
+        # {
+        #     "id": "static-type-id",
+        #     "type": "object",
+        #     "classification": "static",
+        #     "properties": {
+        #     }
+        # },
         {
             "id": "dynamic-type-id",
             "type": "object",
@@ -567,25 +567,29 @@ class OmfNorthPlugin(object):
         typename = self._generate_omf_typename_automatic(sensor_id)
         new_tmp_dict = copy.deepcopy(OMF_TEMPLATE_TYPE)
         omf_type = {typename: new_tmp_dict["typename"]}
+
+        # FIXME:
         # Handles Static section
         # Generates elements evaluating the StaticData retrieved form the Configuration Manager
-        omf_type[typename][0]["properties"]["Name"] = {
-            "type": "string",
-            "isindex": True
-        }
-        omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
-        for item in self._config['StaticData']:
-            omf_type[typename][0]["properties"][item] = {"type": "string"}
+        # omf_type[typename][0]["properties"]["Name"] = {
+        #     "type": "string",
+        #     "isindex": True
+        # }
+        # omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
+        # for item in self._config['StaticData']:
+        #     omf_type[typename][0]["properties"][item] = {"type": "string"}
         # Handles Dynamic section
-        omf_type[typename][1]["properties"]["Time"] = {
+
+        # FIXME:
+        omf_type[typename][0]["properties"]["Time"] = {
             "type": "string",
             "format": "date-time",
             "isindex": True
         }
-        omf_type[typename][1]["id"] = type_id + "_" + typename + "_measurement"
+        omf_type[typename][0]["id"] = type_id + "_" + typename + "_measurement"
         for item in asset_data:
             item_type = plugin_common.evaluate_type(asset_data[item])
-            omf_type[typename][1]["properties"][item] = {"type": item_type}
+            omf_type[typename][0]["properties"][item] = {"type": item_type}
         if _log_debug_level == 3:
             self._logger.debug("_create_omf_type_automatic - sensor_id |{0}| - omf_type |{1}| ".format(sensor_id, str(omf_type)))
 
@@ -617,12 +621,17 @@ class OmfNorthPlugin(object):
         typename = asset_code_omf_type["typename"]
         new_tmp_dict = copy.deepcopy(OMF_TEMPLATE_TYPE)
         omf_type = {typename: new_tmp_dict["typename"]}
+        # FIXME:
         # Handles Static section
-        omf_type[typename][0]["properties"] = asset_code_omf_type["static"]
-        omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
+        # omf_type[typename][0]["properties"] = asset_code_omf_type["static"]
+        # omf_type[typename][0]["id"] = type_id + "_" + typename + "_sensor"
         # Handles Dynamic section
-        omf_type[typename][1]["properties"] = asset_code_omf_type["dynamic"]
-        omf_type[typename][1]["id"] = type_id + "_" + typename + "_measurement"
+
+
+        # FIXME:
+        omf_type[typename][0]["properties"] = asset_code_omf_type["dynamic"]
+        omf_type[typename][0]["id"] = type_id + "_" + typename + "_measurement"
+
         if _log_debug_level == 3:
             self._logger.debug("_create_omf_type_configuration_based - omf_type |{0}| ".format(str(omf_type)))
 
@@ -642,35 +651,39 @@ class OmfNorthPlugin(object):
          """
         sensor_id = self._generate_omf_asset_id(asset_code)
         measurement_id = self._generate_omf_measurement(sensor_id)
-        type_sensor_id = omf_type[typename][0]["id"]
-        type_measurement_id = omf_type[typename][1]["id"]
+        # FIXME:
+        #type_sensor_id = omf_type[typename][0]["id"]
+        type_measurement_id = omf_type[typename][0]["id"]
+
         # Handles containers
         containers = copy.deepcopy(_OMF_TEMPLATE_CONTAINER)
         containers[0]["id"] = measurement_id
         containers[0]["typeid"] = type_measurement_id
+
+        # FIXME:
         # Handles static_data
-        static_data = copy.deepcopy(_OMF_TEMPLATE_STATIC_DATA)
-        static_data[0]["typeid"] = type_sensor_id
-        static_data[0]["values"][0] = copy.deepcopy(self._config['StaticData'])
-        static_data[0]["values"][0]['Name'] = sensor_id
+        # static_data = copy.deepcopy(_OMF_TEMPLATE_STATIC_DATA)
+        # static_data[0]["typeid"] = type_sensor_id
+        # static_data[0]["values"][0] = copy.deepcopy(self._config['StaticData'])
+        # static_data[0]["values"][0]['Name'] = sensor_id
         # Handles link_data
-        link_data = copy.deepcopy(_OMF_TEMPLATE_LINK_DATA)
-        link_data[0]["values"][0]['source']['typeid'] = type_sensor_id
-        link_data[0]["values"][0]['target']['typeid'] = type_sensor_id
-        link_data[0]["values"][0]['target']['index'] = sensor_id
-        link_data[0]["values"][1]['source']['typeid'] = type_sensor_id
-        link_data[0]["values"][1]['source']['index'] = sensor_id
-        link_data[0]["values"][1]['target']['containerid'] = measurement_id
+        # link_data = copy.deepcopy(_OMF_TEMPLATE_LINK_DATA)
+        # link_data[0]["values"][0]['source']['typeid'] = type_sensor_id
+        # link_data[0]["values"][0]['target']['typeid'] = type_sensor_id
+        # link_data[0]["values"][0]['target']['index'] = sensor_id
+        # link_data[0]["values"][1]['source']['typeid'] = type_sensor_id
+        # link_data[0]["values"][1]['source']['index'] = sensor_id
+        # link_data[0]["values"][1]['target']['containerid'] = measurement_id
         if _log_debug_level == 3:
             self._logger.debug("_create_omf_object_links - asset_code |{0}| - containers |{1}| ".format(asset_code,
                                                                                                    str(containers)))
-            self._logger.debug("_create_omf_object_links - asset_code |{0}| - static_data |{1}| ".format(asset_code,
-                                                                                                    str(static_data)))
-            self._logger.debug("_create_omf_object_links - asset_code |{0}| - link_data |{1}| ".format(asset_code,
-                                                                                                  str(link_data)))
+            # self._logger.debug("_create_omf_object_links - asset_code |{0}| - static_data |{1}| ".format(asset_code,
+            #                                                                                         str(static_data)))
+            # self._logger.debug("_create_omf_object_links - asset_code |{0}| - link_data |{1}| ".format(asset_code,
+            #                                                                                       str(link_data)))
         await self.send_in_memory_data_to_picromf("Container", containers)
-        await self.send_in_memory_data_to_picromf("Data", static_data)
-        await self.send_in_memory_data_to_picromf("Data", link_data)
+        # await self.send_in_memory_data_to_picromf("Data", static_data)
+        # await self.send_in_memory_data_to_picromf("Data", link_data)
 
         return
 
